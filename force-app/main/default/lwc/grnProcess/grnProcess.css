@@ -1,0 +1,36 @@
+.fixed-header {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-header th {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+.scrollable-body {
+  display: block;
+  max-height: 300px; /* Adjust height as needed */
+  overflow-y: auto;
+}
+
+.scrollable-body tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table-header tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table-footer {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  z-index: 1;
+}

@@ -1,0 +1,68 @@
+<template>
+    <lightning-card title="Payment Collection">
+        <lightning-layout multiple-rows class="slds-p-around_medium">
+            <!-- Net Amount Display -->
+            <lightning-layout-item size="12">
+                <lightning-input
+                    type="number"
+                    label="Net Amount"
+                    value={totalAmount}
+                    disabled>
+                </lightning-input>
+            </lightning-layout-item>
+
+            <!-- Remaining Amount -->
+            <lightning-layout-item size="12">
+                <lightning-input
+                    type="number"
+                    label="Remaining Amount"
+                    value={totalRemainingAmount}
+                    disabled>
+                </lightning-input>
+            </lightning-layout-item>
+
+            <!-- Amount to Pay -->
+            <lightning-layout-item size="12">
+                <lightning-input
+                    type="number"
+                    label="Amount Paid"
+                    value={amountToPay}
+                    required
+                    onchange={handleAmountChange}>
+                </lightning-input>
+            </lightning-layout-item>
+
+            <!-- Payment Mode -->
+            <lightning-layout-item size="12">
+                <lightning-combobox
+                    name="paymentMode"
+                    label="Payment Mode"
+                    value={paymentMode}
+                    placeholder="Select Payment Mode"
+                    options={paymentModeOptions}
+                    onchange={handlePaymentModeChange}
+                    required
+                    >
+                </lightning-combobox>
+            </lightning-layout-item>
+
+            <lightning-layout-item size="12">
+                <lightning-textarea
+                    type="text"
+                    label="Comment"
+                    value={comment}
+                    onchange={handleCommentChange}>
+                </lightning-textarea>
+            </lightning-layout-item>
+            
+        </lightning-layout>
+
+        <div class="slds-p-around_medium slds-align_absolute-center">
+            <lightning-button
+                label="Submit Payment"
+                variant="brand"
+                onclick={handleSubmit}>
+            </lightning-button>
+        </div>
+    </lightning-card>
+</template>

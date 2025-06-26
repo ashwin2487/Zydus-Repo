@@ -1,0 +1,515 @@
+<template>
+    <lightning-card title="Select Invoice Creation Type" icon-name="standard:email">
+
+        <template if:true={showComponent}>
+            <lightning-radio-group options={invoiceCreationOptions} value={selectedInvoiceCreationType} type="radio"
+                onchange={handleInvoiceCreationTypeChange} class="slds-m-left_medium">
+            </lightning-radio-group>
+
+            <template if:true={isHospitalMode}>
+                <div class="slds-p-around_medium slds-grid slds-wrap slds-gutters">
+                    <!-- Bill to Hospital -->
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Select Bill to Hospital" name="hospital" value={selectedHospital}
+                            options={hospitalOptions} onchange={handleHospitalChange} required>
+                        </lightning-combobox>
+                    </div>
+
+                    <!-- Delivery Challan -->
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Delivery Challan" name="deliveryChallan" value={deliveryChallan}
+                            options={deliveryChallanOptions} onchange={handleDeliveryChallanChange} disabled={disableDC}
+                            required>
+                        </lightning-combobox>
+                    </div>
+
+                    <!-- Invoice Type -->
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Invoice Type" name="invoiceType" value={invoiceType}
+                            options={invoiceTypeOptions} onchange={handleInvoiceTypeChange} required>
+                        </lightning-combobox>
+                    </div>
+
+                    <!-- Account Details Section -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Account Details</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="PAN Number" value={selectedAccountDetails.pan} disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="Contact Mobile Number" value={selectedAccountDetails.phone}
+                                        disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="Contact Person Email" value={selectedAccountDetails.email}
+                                        disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-1">
+                                    <lightning-textarea label="Address" value={selectedAccountDetails.address} disabled>
+                                    </lightning-textarea>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Warehouse Line Items Table -->
+                    <template if:true={warehouseLineItemOptions}>
+                        <div class="slds-col slds-size_1-of-1 slds-m-top_medium">
+                            <div class="slds-scrollable_y"
+                                style="max-height: 300px; border: 1px solid #d8dde6; border-radius: 0.25rem;">
+                                <table
+                                    class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                    <thead>
+                                        <tr class="slds-line-height_reset">
+                                            <th scope="col"><input type="checkbox" checked={isAllSelected}
+                                                    onchange={handleSelectAll} />
+                                            </th>
+                                            <th scope="col">Serial Number</th>
+                                            <th scope="col">DC</th>
+                                            <th scope="col">Product</th>
+                                            <th scope="col">Status</th>
+                                            <th scope="col">Condition</th>
+                                            <th scope="col">Supplied Date</th>
+                                            <th scope="col">
+                                                <lightning-combobox label="Scheme" name="scheme" value={selectedScheme}
+                                                    options={schemeOptions}
+                                                    onchange={handleSchemeChange}></lightning-combobox>
+                                            </th>
+                                            <th scope="col">Discount (%)</th>
+                                            <th scope="col">SGST</th>
+                                            <th scope="col">CGST</th>
+                                            <th scope="col">IGST</th>
+                                            <th scope="col">Bill Discount Amount</th>
+                                            <th scope="col">Net Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template for:each={warehouseLineItemOptions} for:item="item">
+                                            <tr key={item.Id}>
+                                                <td>
+                                                    <input type="checkbox" data-id={item.Id} checked={item.isSelected}
+                                                        onchange={handleRowSelection} />
+                                                </td>
+                                                <td>{item.Serial_Number__c}</td>
+                                                <td>{item.DC}</td>
+                                                <td>{item.ProductName}</td>
+                                                <td>{item.Status__c}</td>
+                                                <td>{item.Condition__c}</td>
+                                                <td>{item.Supplied_Date__c}</td>
+                                                <td>
+                                                    {item.selectedSchemeName}
+                                                </td>
+                                                <td>{item.discount}</td>
+                                                <td>{item.SGST}</td>
+                                                <td>{item.CGST}</td>
+                                                <td>{item.IGST}</td>
+                                                <td>{item.billDiscountAmount}</td>
+
+                                                <td>{item.netAmount}</td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Additional Details -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Additional Details</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <!-- Date of Implant -->
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="date" label="Date of Implant" name="implantDate"
+                                        value={implantDate} onchange={handleInputChange} required>
+                                    </lightning-input>
+                                </div>
+
+                                <!-- IP Number -->
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="IP Number" name="ipNumber" value={ipNumber}
+                                        onchange={handleInputChange} required>
+                                    </lightning-input>
+                                </div>
+
+                                <!-- CATH Number -->
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="text" name="cathNumber" label="CATH Number"
+                                        value={cathNumber} onchange={handleInputChange} onfocus={showCathSuggestions} onblur={hideCathDropDownWithDelay}
+                                         placeholder="Search/Enter CATH number..."
+                                        required>
+                                    </lightning-input>
+
+                                    <template if:true={showCathDropdown}>
+                                        <ul class="slds-box slds-theme_alert-texture slds-m-top_xx-small slds-border_top"
+                                            style="list-style: none; padding-left: 0; max-height: 200px; overflow-y: auto;">
+                                            <template for:each={cathSuggestions} for:item="cath">
+                                                <li key={cath} data-cath={cath} onclick={handleCathSuggestionClick}
+                                                    class="slds-p-around_x-small slds-truncate slds-theme_shade"
+                                                    style="cursor: pointer; border-bottom: 1px solid #c4c2c1;">
+                                                    {cath}
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </template>
+                                </div>
+                                
+                                <!-- Comment / Remark -->
+                                <div class="slds-col slds-size_1-of-1">
+                                    <lightning-textarea label="Comment / Remark" name="comment" value={comment}
+                                        onchange={handleInputChange} required>
+                                    </lightning-textarea>
+                                </div>
+
+                                <!-- File Upload -->
+                                <div class="slds-col slds-size_1-of-1 slds-m-top_medium">
+                                    <lightning-file-upload label="Upload necessary files (PDF and JPEG only)"
+                                        accept=".pdf,.jpeg,.jpg" record-id={recordId}
+                                        onuploadfinished={handleUploadFinished}>
+                                    </lightning-file-upload>
+
+                                    <!-- Display selected file name -->
+                                    <template if:true={uploadedFileName}>
+                                        <p class="slds-m-top_small">Selected File: {uploadedFileName} </p>
+                                    </template>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Patient Information -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Patient Information</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="First Name" name="firstName" data-section="patient"
+                                        value={patientFirstName} onchange={handleInputChange} required>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="Last Name" name="lastName" data-section="patient"
+                                        value={patientLastName} onchange={handleInputChange} required>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="number" label="Age" name="age" data-section="patient"
+                                        value={patientAge} onchange={handleInputChange} required>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="text" label="Patient Register Number" name="patientRegisterNumber" data-section="patient"
+                                        value={patientRegisterNumber} onchange={handleInputChange} required>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-combobox name="gender" label="Gender" data-section="patient"
+                                        value={patientGender} options={genderOptions} onchange={handleInputChange}
+                                        required>
+                                    </lightning-combobox>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Doctor Information -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Doctor Information</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="text" name="Doctor Name" label="Doctor Name"
+                                        value={doctorInput} onchange={handleInputChange} onfocus={showSuggestions}
+                                        onblur={hideSuggestionsWithDelay} placeholder="Search/Enter doctor name..."
+                                        required>
+                                    </lightning-input>
+
+                                    <template if:true={showDropdown}>
+                                        <ul class="slds-box slds-theme_alert-texture slds-m-top_xx-small slds-border_top"
+                                            style="list-style: none; padding-left: 0; max-height: 200px; overflow-y: auto;">
+                                            <template for:each={suggestions} for:item="doctor">
+                                                <li key={doctor} data-doctor={doctor} onclick={handleSuggestionClick}
+                                                    class="slds-p-around_x-small slds-truncate slds-theme_shade"
+                                                    style="cursor: pointer; border-bottom: 1px solid #c4c2c1;">
+                                                    {doctor}
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </template>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div class="slds-col slds-size_1-of-1 slds-align_absolute-center slds-m-top_large">
+                        <lightning-button label="Save Invoice" onclick={handleSaveInvoice} variant="brand">
+                        </lightning-button>
+                    </div>
+                </div>
+            </template>
+
+            <template if:true={isChannelPartnerMode}>
+                <div class="slds-p-around_medium slds-grid slds-wrap slds-gutters">
+                    <!-- Bill to Hospital -->
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Select Bill to Channel Partner" name="channelPartner"
+                            value={selectedChannelPartner} options={channelPartnerOptions}
+                            onchange={handleChannelPartnerSelect} required>
+                        </lightning-combobox>
+                    </div>
+
+                    <!-- Delivery Challan -->
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Delivery Challan" name="deliveryChallan"
+                            value={selectedDeliveryChallan} options={channelPartnerDeliveryChallanOptions}
+                            onchange={handleChannelPartnerDeliveryChallanChange} required>
+                        </lightning-combobox>
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Select Invoice" name="invoice" value={selectedInvoice}
+                            options={invoiceOptions} onchange={handleInvoiceChange} placeholder="Select an Invoice"
+                            required>
+                        </lightning-combobox>
+                    </div>
+
+                    <!-- Invoice Type -->
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Invoice Type" name="invoiceType" value={invoiceType}
+                            options={invoiceTypeOptions} onchange={handleInvoiceTypeChange} required>
+                        </lightning-combobox>
+
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Payment Mode" name="paymentMode" value={paymentMode}
+                            options={paymentModeOptions} onchange={handlePaymentModeChange} required>
+                        </lightning-combobox>
+                    </div>
+
+                    <!-- Account Details Section -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Account Details</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="PAN Number" value={selectedAccountDetails.pan} disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="Contact Mobile Number" value={selectedAccountDetails.phone}
+                                        disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="Contact Person Email" value={selectedAccountDetails.email}
+                                        disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-1">
+                                    <lightning-textarea label="Address" value={selectedAccountDetails.address} disabled>
+                                    </lightning-textarea>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <template if:true={warehouseLineItemOptionsCP}>
+                        <div class="slds-col slds-size_1-of-1 slds-m-top_medium">
+                            <div class="slds-scrollable_y"
+                                style="max-height: 300px; border: 1px solid #d8dde6; border-radius: 0.25rem;">
+                                <table
+                                    class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                    <thead>
+                                        <tr class="slds-line-height_reset">
+                                            <th scope="col">
+                                                <input type="checkbox" checked={isAllSelectedCP}
+                                                    onchange={handleSelectAllCP} />
+                                            </th>
+                                            <th scope="col">Serial Number</th>
+                                            <th scope="col">DC</th>
+                                            <th scope="col">Product</th>
+                                            <th scope="col">Status</th>
+                                            <th scope="col">Condition</th>
+                                            <th scope="col">Supplied Date</th>
+                                            <th scope="col">
+                                                <lightning-combobox label="Scheme" name="scheme" value={selectedScheme}
+                                                    options={schemeOptions} onchange={handleSchemeChangeCP}>
+                                                </lightning-combobox>
+                                            </th>
+                                            <th scope="col">Discount (%)</th>
+                                            <th scope="col">SGST</th>
+                                            <th scope="col">CGST</th>
+                                            <th scope="col">IGST</th>
+                                            <th scope="col">Bill Discount Amount</th>
+                                            <th scope="col">Net Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template for:each={warehouseLineItemOptionsCP} for:item="item">
+                                            <tr key={item.serialNumber}>
+                                                <td>
+                                                    <input type="checkbox" data-id={item.serialNumber}
+                                                        checked={item.isSelected} onchange={handleRowSelectionCP} />
+                                                </td>
+                                                <td>{item.serialNumber}</td>
+                                                <td>{item.dcName}</td>
+                                                <td>{item.productName}</td>
+                                                <td>{item.status}</td>
+                                                <td>{item.condition}</td>
+                                                <td>{item.suppliedDate}</td>
+                                                <td>{item.selectedSchemeName}</td>
+                                                <td>{item.selectedSchemeDiscount}</td>
+                                                <td>{item.SGST}</td>
+                                                <td>{item.CGST}</td>
+                                                <td>{item.IGST}</td>
+                                                <td>{item.billDiscountAmount}</td>
+                                                <td>{item.netAmount}</td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Additional Details -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Additional Details</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <!-- Date of Implant -->
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="date" label="Date of Implant" name="implantDateCP"
+                                        value={implantDateCP} required disabled>
+                                    </lightning-input>
+                                </div>
+
+                                <!-- IP Number -->
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="IP Number" name="ipNumberCP" value={ipNumberCP} disabled
+                                        required>
+                                    </lightning-input>
+                                </div>
+
+                                <!-- CATH Number -->
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="CATH Number" name="cathNumberCP" value={cathNumberCP}
+                                        onchange={handleInputChange} required disabled>
+                                    </lightning-input>
+                                </div>
+
+                                <!-- Credit Note -->
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-combobox label="Credit Note" name="creditNote" value={creditNote}
+                                        onchange={handleCNChange} options={creditNoteOptions}
+                                        placeholder="Select a Credit Note" class="slds-m-bottom_small">
+                                    </lightning-combobox>
+                                    <template if:true={selectedCreditNotes.length}>
+                                        <template for:each={selectedCreditNotes} for:item="note">
+                                            <span key={note.value} class="slds-m-right_small">
+                                                <lightning-pill label={note.label} name={note.value}
+                                                    onremove={handleRemoveCreditNote}>
+                                                    <lightning-icon icon-name="utility:money"
+                                                        variant="circle"></lightning-icon>
+                                                </lightning-pill>
+                                            </span>
+                                        </template>
+                                    </template>
+                                </div>
+
+
+
+                                <!-- Comment / Remark -->
+                                <div class="slds-col slds-size_1-of-1">
+                                    <lightning-textarea label="Comment / Remark" name="comment" value={comment}
+                                        onchange={handleInputChange} required>
+                                    </lightning-textarea>
+                                </div>
+
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Patient Information -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Patient Information</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="First Name" name="firstName" data-section="patient"
+                                        value={patientFirstNameCP} required disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input label="Last Name" name="lastName" data-section="patient"
+                                        value={patientLastNameCP} required disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="number" label="Age" name="age" data-section="patient"
+                                        value={patientAgeCP} required disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="text" label="Patient Register Number" name="patientRegisterNumber" data-section="patient"
+                                        value={patientRegisterNumberCP} required disabled>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-combobox name="gender" label="Gender" data-section="patient"
+                                        value={patientGenderCP} required disabled>
+                                    </lightning-combobox>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Doctor Information -->
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_large">
+                        <section class="slds-box slds-theme_default">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Doctor Information</h3>
+                            <div class="slds-grid slds-wrap slds-gutters">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="text" name="Doctor Name" label="Doctor Name"
+                                        value={doctorInputCP} required disabled>
+                                    </lightning-input>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <!-- Save Button -->
+                    <div class="slds-col slds-size_1-of-1 slds-align_absolute-center slds-m-top_large">
+                        <lightning-button label="Save Invoice" onclick={handleSaveInvoiceCP} variant="brand">
+                        </lightning-button>
+                    </div>
+                </div>
+            </template>
+
+        </template>
+
+        <!-- Error Message -->
+        <template if:false={showComponent}>
+            <div class="slds-box slds-theme_alert-texture slds-theme_warning slds-m-around_medium" role="alert">
+                <div class="slds-media slds-media_center">
+                    <div class="slds-media__figure">
+                        <lightning-icon icon-name="utility:warning" alternative-text="Warning" variant="warning"
+                            size="small">
+                        </lightning-icon>
+                    </div>
+                    <div class="slds-media__body">
+                        <p class="slds-text-body_regular slds-text-color_weak">{errorMessage}</p>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </lightning-card>
+</template>

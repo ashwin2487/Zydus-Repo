@@ -1,0 +1,16 @@
+<template>
+    <lightning-card title="ARS Purchase Orders">
+        <template if:true={opportunities}>
+            <template for:each={opportunities} for:item="opp">
+                <div key={opp.Id} class="slds-box slds-m-bottom_small">
+                    <p><strong>{opp.Name}</strong></p>
+                    <lightning-button label="Approve" onclick={handleApprove} data-id={opp.Id} class="slds-m-right_small"></lightning-button>
+                    <lightning-button label="Edit" onclick={handleEdit} data-id={opp.Id}></lightning-button>
+                </div>
+            </template>
+        </template>
+        <template if:true={showEditor}>
+            <c-opportunity-editor opportunity-id={selectedOpportunityId} onclose={handleEditorClose}></c-opportunity-editor>
+        </template>
+    </lightning-card>
+</template>

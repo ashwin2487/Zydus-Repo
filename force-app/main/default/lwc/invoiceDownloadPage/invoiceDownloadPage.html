@@ -1,0 +1,221 @@
+<template>
+    <div class="invoice-wrapper">
+        <div class="invoice-container">
+            <!-- Header Section -->
+
+            <!-- Invoice Title -->
+            <div class="invoice-title">TAX INVOICE</div>
+
+            <!-- Address Section -->
+            <div class="address-section">
+                <div class="address-box">
+                    <div class="address-title">Consignor Bill From :-</div>
+                    <div class="bold">{consignorName}</div>
+                    <div>{consignorAddress}<br>
+                    {consignorCity}, {consignorState} - {consignorPinCode}<br>
+                    {consignorState}, INDIA<br><br>
+                    <strong>GSTIN No. :-</strong> {consignorGstNumber}<br>
+                    <strong>PAN No.</strong> :- {consignorPanNumber}<br>
+                    <strong>DL No.</strong> :- {consignorDLNumber}
+                    </div>
+                </div>
+                <div class="address-box">
+                    <div class="address-title">Consignor Ship From:-</div>
+                    <div class="bold">{consignorName}</div>
+                    <div>{consignorShipAddress}<br>
+                    {consignorShipCity}, {consignorShipState} - {consignorShipPinCode}<br>
+                    {consignorShipState}, INDIA<br><br>
+                    <strong>GSTIN No. :-</strong> {consignorGstNumber}<br>
+                    <strong>PAN No.</strong> :- {consignorPanNumber}<br>
+                    <strong>DL No.</strong> :- {consignorDLNumber}
+                    </div>
+                </div>
+                <div class="address-box">
+                    <div><strong>INVOICE NO</strong> : {invoiceNumber}<br>
+                    <strong>INVOICE DATE</strong> : {invoiceDate}<br>
+                    <strong>INVOICE DUE DATE</strong> : {invoiceDueDate}<br>
+                    <strong>Easy bill No/Date</strong> :<br><br>
+                    <strong>Payment Terms</strong> : {paymentTerm}<br>
+                    <strong>Ref. No. & Date</strong> :<br><br>
+                    <strong>Dispatched through & Doc No.</strong> :<br>
+                    <strong>Exporter Ref.</strong> L.E. CODE NO.: N/A <strong>Dated</strong> : N/A
+                    </div>
+                </div>
+            </div>
+
+            <!-- Consignee Address Section -->
+            <div class="address-section">
+                <div class="address-box">
+                    <div class="address-title">Consignee Bill To :-</div>
+                    <div class="bold">{consigneeName}</div>
+                    <div>{consigneeAddress}<br>
+                    {consigneeCity}, {consigneeState} - {consigneePinCode}<br><br>
+                    <strong>GSTIN No. :-</strong> {consigneeGstNumber}<br>
+                    <strong>PAN</strong> :- {consigneePanNumber}<br>
+                    <strong>DL No.</strong> :- {consigneeDLNumber}
+                    </div>
+                </div>
+                <div class="address-box">
+                    <div class="address-title">Consignee Ship To :-</div>
+                    <div class="bold">{consigneeName}</div>
+                    <div>{consigneeShipAddress}<br>
+                    {consigneeShipCity}, {consigneeShipState} - {consigneeShipPinCode}<br><br>
+                    <strong>GSTIN No. :-</strong> {consigneeGstNumber}<br>
+                    <strong>PAN</strong> :- {consigneePanNumber}<br>
+                    <strong>DL No.</strong> :- {consigneeDLNumber}
+                    </div>
+                </div>
+                <div class="address-box">
+                    <div class="bold">IMPLANT DETAILS</div>
+                    <div><strong>Patient Name</strong> : {patientName}<br>
+                    <strong>Age</strong> : {patientAge}<br>
+                    <strong>Gender</strong> : {patientGender} <strong>Date of Implant</strong> :<br>
+                    <strong>Dr. Name</strong> : <strong>IP number</strong> : {ipNumber}<br>
+                    <strong>Scheme</strong> : {scheme} <strong>CATH Number</strong> : {cathNumber}<br>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transport Details -->
+            <div class="transport-section">
+                <div class="transport-item"><strong>Pre-carriage by</strong></div>
+                <div class="transport-item"><strong>By Road</strong></div>
+                <div class="transport-item"><strong>Country Of Origin Of Goods:</strong> INDIA</div>
+                <div class="transport-item"><strong>Description</strong></div>
+                <div class="transport-item"><strong>Dispatched From Place:</strong> {consignorShipCity}</div>
+                <div class="transport-item"><strong>Dispatched From State:</strong> {consignorShipState}</div>
+                <div class="transport-item"><strong>Place Of Supply:</strong> {consigneeShipCity}</div>
+                <div class="transport-item"><strong>State of Supply:</strong> {consigneeShipState}</div>
+            </div>
+
+            <!-- Items Table -->
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th rowspan="3">Sr. No.</th>
+                        <th rowspan="3">Product Name</th>
+                        <th rowspan="3">Diameter</th>
+                        <th rowspan="3">Length</th>
+                        <th rowspan="3">Description</th>
+                        <th rowspan="3">Batch No</th>
+                        <th rowspan="3">Sr. No.</th>
+                        <th rowspan="3">Mfg. Date</th>
+                        <th rowspan="3">Exp. Date</th>
+                        <!-- <th rowspan="3">Qty</th> -->
+                        <th rowspan="3">HSN</th>
+                        <th rowspan="3">Taxable value</th>
+                        <th rowspan="3">totalBeforeTax</th>
+                        <th colspan="2">CGST</th>
+                        <th colspan="2">SGST</th>
+                        <th colspan="2">IGST</th>
+                        <th rowspan="3">Total Value</th>
+                    </tr>
+                    <tr>
+                        <th>Rate</th>
+                        <th>Amt.</th>
+                        <th>Rate</th>
+                        <th>Amt.</th>
+                        <th>Rate</th>
+                        <th>Amt.</th>
+                    </tr>
+                    <tr>
+                        <th>Rate</th>
+                        <th>Amt.</th>
+                        <th>Rate</th>
+                        <th>Amt.</th>
+                        <th>Rate</th>
+                        <th>Amt.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template for:each={invoiceItems} for:item="item">
+                        <tr key={item.Id}>
+                            <td>{item.id}</td>
+                            <td class="desc-col">{item.productName}</td>
+                            <td>{item.diameter}</td>
+                            <td>{item.length}</td>
+                            <td class="desc-col">{item.description}</td>
+                            <td>{item.batchNumber}</td>
+                            <td>{item.serialNumber}</td>
+                            <td>{item.mfgDate}</td>
+                            <td>{item.expiryDate}</td>
+                            <!-- <td>{item.quantity}</td> -->
+                            <td>{item.hsn}</td>
+                            <td>{item.unitPrice}</td>
+                            <td>{item.totalBeforeTax}</td>
+                            <td>{item.cgstRate}</td>
+                            <td>{item.cgst}</td>
+                            <td>{item.sgstRate}</td>
+                            <td>{item.sgst}</td>  
+                            <td>{item.igstRate}</td>
+                            <td>{item.igst}</td>
+
+                            <td>{item.netAmount}</td>
+                        </tr>
+                    </template>
+                    <tr>
+                        <td colspan="12" class="text-right bold">TOTAL</td>
+                        <!-- <td class="bold">{totalCGSTRate}</td> -->
+                        <td class="bold" colspan="2">{totalCGSTAmount}</td>
+                        <!-- <td class="bold">{totalSGSTRate}</td> -->
+                        <td class="bold" colspan="2">{totalSGSTAmount}</td>
+                        <!-- <td class="bold">{totalIGSTRate}</td> -->
+                        <td class="bold" colspan="2">{totalIGSTAmount}</td>
+                        <td class="bold">{totalAmount}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Amount in Words -->
+            <div class="amount-words">
+                <strong>Amount (In Words) :</strong> {amountInWords}<br>
+                All the products inspected are STERILE.
+            </div>
+
+            <!-- Footer Notes -->
+            <div class="footer-section">
+                Goods once sold are not returnable.<br><br>
+
+                <strong>Comments:</strong><br>
+                {comments}<br><br>
+                
+                <strong>Payment Terms:</strong><br>
+                Interest will be recovered @8% p.a. on overdue unpaid bills.<br>
+                <strong>Shipping Instructions:</strong><br>
+                Avoid Exposure to direct sunlight at factory & Keep the products in a clean, organized, cool and dry place<br>
+                For Reference No please refer Product Catalogue.<br>
+                Our responsibility ceases once the goods leave our premises & without any act of omitted product.<br>
+                Subject to Ahmedabad Jurisdiction.<br>
+                Goods once sold are not returnable.<br>
+                Buyer's Responsibility cover once the goods leave our premises.<br>
+                Claim for any loss in the consignment should be settled by the buyer directly with the carrier.<br>
+                Jurisdiction:<br>
+                We declare that this Invoice shows the actual price of the goods described and that all particulars are true and correct
+                E&OE
+            </div>
+
+            <!-- Signature Section -->
+            <div class="signature-section">
+                <div>
+                    <div><strong>Receiver Signature</strong></div>
+                </div>
+                <div>
+                    <div><strong>Authorised Signatory:</strong></div>
+                </div>
+                <div class="stamp">
+                    <div>GOWELL<br>HEALTHTECH</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Button Section -->
+        <div class="download-section">
+            <button class="download-btn" onclick={handleDownloadPDF}>
+                <svg class="download-icon" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                </svg>
+                Download Invoice
+            </button>
+        </div>
+    </div>
+</template>

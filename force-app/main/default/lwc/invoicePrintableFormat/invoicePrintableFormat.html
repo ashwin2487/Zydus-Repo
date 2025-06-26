@@ -1,0 +1,94 @@
+<template>
+  <lightning-card title="Tax Invoice" icon-name="standard:invoice">
+    <div class="slds-p-around_medium">
+
+      <!-- Invoice Header -->
+      <div class="slds-grid slds-wrap slds-m-bottom_medium">
+        <div class="slds-col slds-size_1-of-2">
+          <p><strong>Invoice No:</strong> {invoiceData.invoiceNo}</p>
+          <p><strong>Invoice Date:</strong> {invoiceData.invoiceDate}</p>
+          <p><strong>Payment Terms:</strong> {invoiceData.paymentTerms}</p>
+          <p><strong>E-way Bill No:</strong> {invoiceData.ewayBillNo}</p>
+        </div>
+        <div class="slds-col slds-size_1-of-2">
+          <p><strong>GSTIN:</strong> {invoiceData.gstin}</p>
+          <p><strong>PAN:</strong> {invoiceData.pan}</p>
+          <p><strong>DL No.:</strong> {invoiceData.dlNo}</p>
+        </div>
+      </div>
+
+      <!-- Consignor & Consignee -->
+      <div class="slds-grid slds-wrap slds-m-bottom_medium">
+        <div class="slds-col slds-size_1-of-2">
+          <h3 class="slds-text-title_bold">From (Consignor):</h3>
+          <template for:each={invoiceData.consignor} for:item="line">
+            <p key={line}>{line}</p>
+          </template>
+        </div>
+        <div class="slds-col slds-size_1-of-2">
+          <h3 class="slds-text-title_bold">To (Consignee):</h3>
+          <template for:each={invoiceData.consignee} for:item="line">
+            <p key={line}>{line}</p>
+          </template>
+        </div>
+      </div>
+
+      <!-- Patient and Doctor Details -->
+      <div class="slds-m-bottom_medium">
+        <h3 class="slds-text-title_bold">Patient Details:</h3>
+        <p><strong>Patient Name:</strong> {invoiceData.patientName}</p>
+        <p><strong>Gender:</strong> {invoiceData.gender} | <strong>Age:</strong> {invoiceData.age}</p>
+        <p><strong>Date of Implant:</strong> {invoiceData.implantDate}</p>
+        <p><strong>Doctor Name:</strong> {invoiceData.doctorName} | <strong>IP Number:</strong> {invoiceData.ipNumber}</p>
+      </div>
+
+      <!-- Products Table -->
+      <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-m-bottom_medium">
+        <thead>
+          <tr>
+            <th>Product Name</th>
+            <th>Dia</th>
+            <th>Length</th>
+            <th>Batch No</th>
+            <th>Sr No</th>
+            <th>Mfg Date</th>
+            <th>Exp Date</th>
+            <th>HSN</th>
+            <th>Rate</th>
+            <th>GST</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template for:each={invoiceData.products} for:item="product">
+            <tr key={product.srNo}>
+              <td>{product.name}</td>
+              <td>{product.dia}</td>
+              <td>{product.length}</td>
+              <td>{product.batchNo}</td>
+              <td>{product.srNo}</td>
+              <td>{product.mfgDate}</td>
+              <td>{product.expDate}</td>
+              <td>{product.hsn}</td>
+              <td>{product.rate}</td>
+              <td>{product.gst}</td>
+              <td>{product.total}</td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <!-- Declaration and Footer -->
+      <div class="slds-m-bottom_medium">
+        <p><strong>Declaration:</strong> {invoiceData.declaration}</p>
+        <p><strong>Amount in Words:</strong> {invoiceData.amountInWords}</p>
+        <p><strong>Note:</strong> {invoiceData.note}</p>
+      </div>
+
+      <div class="slds-text-align_right slds-m-top_medium">
+        <p><strong>Authorised Signatory</strong></p>
+        <p>{invoiceData.authorisedBy}</p>
+      </div>
+    </div>
+  </lightning-card>
+</template>

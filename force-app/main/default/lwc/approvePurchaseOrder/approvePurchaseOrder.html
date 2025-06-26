@@ -1,0 +1,27 @@
+<template>
+    <div class="slds-modal__content slds-p-around_large">
+        <!-- Larger Heading -->
+        <h2 class="slds-text-heading_small slds-m-bottom_medium">
+            Are you sure you want to approve this Purchase Order?
+        </h2>
+
+        <!-- Horizontal Divider -->
+        <hr class="slds-m-bottom_medium"/>
+
+        <!-- Right-aligned Buttons -->
+        <div class="slds-text-align_right">
+            <lightning-button 
+                variant="neutral" 
+                label="Cancel" 
+                onclick={closeAction} 
+                class="slds-m-right_small">
+            </lightning-button>
+
+            <lightning-button 
+                variant="brand" 
+                label="Approve Purchase Order" 
+                onclick={handleApprove}>
+            </lightning-button>
+        </div>
+    </div>
+</template>

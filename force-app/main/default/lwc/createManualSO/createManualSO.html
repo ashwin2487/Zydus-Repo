@@ -1,0 +1,63 @@
+<template>
+    <lightning-card title="Create Sales Order" icon-name="standard:orders">
+        <template if:true={isLoading}>
+            <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+        </template>
+
+        <div class="slds-p-around_medium">
+            <lightning-input label="Supplier Distributor" value={selectedSupplierName} required
+                disabled></lightning-input>
+
+            <lightning-combobox label="Consignee Distributor" value={consigneeDistributor}
+                onchange={handleConsigneeDistributorChange} options={consigneeDistributorOptions} required>
+            </lightning-combobox>
+
+            <!-- <lightning-input label="Sales Order Name" value={soName} required disabled></lightning-input> -->
+
+            <lightning-input label="Pricebook Mapping" value={selectedPriceBook} required disabled
+                class="slds-m-bottom_medium">
+            </lightning-input>
+
+            <template if:true={validSelectedProducts.length}>
+                <div class="slds-box slds-m-top_medium">
+                    <div class="slds-text-heading_small slds-m-bottom_small">Selected Products</div>
+                    <template for:each={validSelectedProducts} for:item="product">
+                        <div key={product.Id}
+                            class="slds-grid slds-grid_align-spread slds-p-vertical_x-small slds-border_bottom">
+                            <div>
+                                <strong>{product.ZydusProduct}</strong>
+                                <div class="slds-text-body_small">Serial #: {product.Serial_Number__c}</div>
+                            </div>
+                            <lightning-button-icon icon-name="utility:delete" alternative-text="Remove" title="Remove"
+                                onclick={removeSelectedProduct} data-id={product.Id} class="slds-m-left_small">
+                            </lightning-button-icon>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+
+
+            <!-- Product Table -->
+            <template if:true={showWarehouseLineItemTable}>
+                <div class="slds-p-bottom_medium slds-p-top_medium">Available Products</div>
+                <div style="height: 350px; overflow: auto;">
+                    <lightning-datatable key-field="Id" data={sortedData} columns={columns} onsort={handleSort}
+                        sorted-by={sortBy} sorted-direction={sortDirection} onrowselection={handleRowSelection}>
+                    </lightning-datatable>
+                </div>
+            </template>
+
+            <div class="slds-grid slds-gutters slds-m-top_large">
+                <div class="slds-col slds-align-bottom">
+                    <lightning-button variant="neutral" label="Add Product" icon-name="utility:add"
+                        onclick={handleAddProduct} class="slds-m-right_small" disabled={disableAddProductBtn}>
+                    </lightning-button>
+                    <lightning-button variant="brand" label="Create Manual Sales Order" onclick={handleCreateManualSO}
+                        disabled={disableCreateSOBtn}>
+                    </lightning-button>
+                </div>
+            </div>
+        </div>
+    </lightning-card>
+</template>

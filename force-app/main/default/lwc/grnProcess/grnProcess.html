@@ -1,0 +1,80 @@
+<template>
+  <lightning-card title="Process GRN">
+
+    <!-- Error Message -->
+    <template if:true={error}>
+      <div class="slds-text-color_error slds-p-around_small">{error}</div>
+    </template>
+
+    <!-- Scrollable Responsive Table -->
+    <div class="slds-p-horizontal_small slds-scrollable_x">
+      <table
+        class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered slds-max-medium-table_stacked">
+        <thead class="slds-theme_shade" style="position: sticky; top: 0; z-index: 1;">
+          <tr class="slds-line-height_reset">
+            <th scope="col" style="width: 40px;">
+              <lightning-input type="checkbox" checked={isAllSelected} onchange={handleSelectAll} class="slds-checkbox">
+              </lightning-input>
+            </th>
+            <th scope="col">Product</th>
+            <th scope="col">Serial Number</th>
+            <th scope="col">Batch Number</th>
+            <th scope="col">Expiry Date</th>
+            <th scope="col" style="min-width: 150px;">
+              Status
+              <lightning-combobox value={headerStatus} options={statusOptions} onchange={handleHeaderStatusChange}
+                class="slds-m-top_xx-small">
+              </lightning-combobox>
+            </th>
+            <th scope="col" style="min-width: 180px;">
+              Rejection Reason
+              <lightning-combobox value={headerRejectionReason} options={rejectionReasons}
+                onchange={handleHeaderRejectionChange} disabled={isHeaderRejectionDisabled} class="slds-m-top_xx-small">
+              </lightning-combobox>
+            </th>
+            <th scope="col" style="min-width: 160px;">
+              Warehouse
+              <lightning-combobox value={headerWarehouse} options={warehouseOptions}
+                onchange={handleHeaderWarehouseChange} class="slds-m-top_xx-small">
+              </lightning-combobox>
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <template for:each={lineItems} for:item="item">
+            <tr key={item.id}>
+              <td>
+                <lightning-input type="checkbox" data-id={item.id} checked={item.isSelected}
+                  onchange={handleRowSelection}>
+                </lightning-input>
+              </td>
+              <td>{item.productName}</td>
+              <td>{item.serialNumber}</td>
+              <td>{item.batchNumber}</td>
+              <td>{item.expiryDate}</td>
+              <td>{item.status}</td>
+              <td>
+                <template if:true={item.showRejectionCommentBox}>
+                  <lightning-textarea name="rejectionComment" value={item.rejectionComment} data-index={index}
+                    onchange={handleChangeRejectionCommentChange}></lightning-textarea>
+                </template>
+                <template if:false={item.showRejectionCommentBox}>
+                  {item.rejectionReason}
+                </template>
+          </td>
+          <td>{item.selectedWarehouseName}</td>
+          </tr>
+</template>
+</tbody>
+</table>
+</div>
+
+<!-- Footer Submit Button -->
+<div class="slds-m-top_medium slds-p-around_medium slds-grid slds-grid_align-end">
+  <lightning-button variant="brand" label="Submit" onclick={handleSubmit}>
+  </lightning-button>
+</div>
+
+</lightning-card>
+</template>

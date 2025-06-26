@@ -1,0 +1,246 @@
+<template>
+    <div class="slds-modal__container pdf-wrapper" style="width: 100%; max-width: 100vw; overflow-x: auto;">
+        <div class="challan-header">
+            <!-- <div class="company-logo">
+                <span class="logo-text">{consignorName}</span>
+            </div> -->
+            <!-- <div class="company-details">
+                <div>CORP OFFICE: 1004, 10TH FLOOR, BINORI B SQUARE II, OPP.HATHISINH NI VADI, AMBLI - ISCKON ROAD,
+                    AMBLI AHMEDABAD-380054, GUJARAT, INDIA</div>
+                <div>Tel No: 02717 452130 | Mo : +91 90332 28591 | Email: info@gowellhealthtech.com | Website:
+                    www.gowellhealthtech.com</div>
+            </div> -->
+        </div>
+
+        <div class="challan-title-box">
+                <span class="challan-title-text">Delivery Challan</span>
+            </div>
+
+        <div class="information" style="display: flex; margin-bottom: 15px;">
+            <div style="display: flex; flex-direction: column; flex: 2;">
+                <div style="display: flex; margin-bottom: 0;">
+                    <div class="info-block" style="flex: 1; border-bottom: none;">
+                        <div class="info-title">Consignor Bill From :-</div>
+                        <div>{consignorName}</div>
+                        <div>{consignorAddress}</div>
+                        <div>{consignorCity}, {consignorState} - {consignorPinCode}</div>
+                        <div>{consignorState} | INDIA</div>
+                        <br>
+                        <div><strong>GSTIN No. :-</strong> {consignorGstNumber}</div>
+                        <div><strong>PAN :-</strong> {consignorPanNumber}</div>
+                        <div><strong>DL No. :-</strong> {consignorDLNumber}</div>
+                        <br>
+                        <hr>
+                    </div>
+                    <div class="info-block" style="flex: 1; border-bottom: none; border-right: none;">
+                        <div class="info-title">Consignor Ship From :-</div>
+                        <div>{consignorName}</div>
+                        <div>{consignorShipAddress}</div>
+                        <div>{consignorShipCity}, {consignorShipState} - {consignorShipPinCode}</div>
+                        <div>{consignorShipState} | INDIA</div>
+                        <br>
+                        <div><strong>GSTIN No. :-</strong> {consignorGstNumber}</div>
+                        <div><strong>PAN :-</strong> {consignorPanNumber}</div>
+                        <div><strong>DL No. :-</strong> {consignorDLNumber}</div>
+                        <br>
+                        <hr>
+                    </div>
+                </div>
+                <div style="display: flex;">
+                    <div class="info-block" style="flex: 1; border-top: none;">
+                        <div class="info-title">Consignee Bill To :-</div>
+                        <div>{consigneeName}</div>
+                        <div>{consigneeAddress}</div>
+                        <div>{consigneeCity}, {consigneeState} - {consigneePinCode}</div>
+                        <div><strong>GSTIN No. :-</strong> {consigneeGstNumber}</div>
+                        <div><strong>PAN :-</strong> {consigneePanNumber}</div>
+                    </div>
+                    <div class="info-block" style="flex: 1; border-top: none; border-right: none;">
+                        <div class="info-title">Consignee Bill To :-</div>
+                        <div>{consigneeName}</div>
+                        <div>{consigneeShipAddress}</div>
+                        <div>{consigneeShipCity}, {consigneeShipState} - {consigneeShipPinCode}</div>
+                        <div><strong>GSTIN No. :-</strong> {consigneeGstNumber}</div>
+                        <div><strong>PAN :-</strong> {consigneePanNumber}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="info-block" style="flex: 1; border-right: 1px solid #000; height: auto;">
+                <div><strong>Delivery Challan No :-</strong> {deliveryChallanNumber}</div>
+                <div><strong>Delivery Challan  Date :-</strong> {deliveryChallanDate}</div>
+                <div><strong>Eway Bill No & Date :-</strong> To be imported from PL tax after integration.</div>
+                <div><strong>Exporter Ref. :-</strong></div>
+                <div><strong>I. E. CODE NO. :-</strong> N/A</div>
+                <div><strong>Dated :-</strong> N/A</div>
+                <div><strong>Supply Order No :-</strong> {supplyOrderNumber}</div>
+                <div><strong>Supply Order Date :-</strong> {supplyOrderDate}</div>
+                <div><strong>Courier Name :-</strong> {courierName}</div>
+                <div><strong>Courier Docket No :-</strong> {courierDocketNumber}</div>
+                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ccc;">
+                    <div><strong>Remark :-</strong></div>
+                    <div>"Goods send on sale on approval basis"</div>
+                    <div>{comment}</div>
+                    <div><strong>Shipping instructions :</strong></div>
+                    <div>1. Avoid Exposure to direct sunlight or heaters.</div>
+                    <div>2. Keep the products in a clean, organized, cool and dry place</div>
+                </div>
+            </div>
+        </div>
+
+        <table class="challan-table">
+            <tr>
+                <td colspan="20" style="text-align: left; padding: 8px;">
+                    <div style="display: flex; width: 100%;">
+                        <div style="flex: 1; padding-right: 10px;"><strong>Pre carriage by</strong><br>By Road</div>
+                        <div style="flex: 1; padding-right: 10px;"><strong>Country Of Origin Of Goods</strong><br>INDIA
+                        </div>
+                        <div style="flex: 1; padding-right: 10px;"><strong>Dispatch From
+                                Place</strong><br> {dispatchFromPlace}</div>
+                        <div style="flex: 1; padding-right: 10px;"><strong>Dispatch From
+                                State</strong><br> {dispatchFromState}</div>
+                        <div style="flex: 1; padding-right: 10px;"><strong>Place Of Supply</strong><br> {placeOfSupply}
+                        </div>
+                        <div style="flex: 1;"><strong>State of Supply</strong><br> {stateOfSupply}</div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th>Sr. No.</th>
+                <th>Sub DC No.</th>
+                <th>Product Name</th>
+                <th>Dia</th>
+                <th>Length</th>
+                <th>Description</th>
+                <th>Batch No</th>
+                <th>Sr. No</th>
+                <th>Mfg. Date</th>
+                <th>Exp. Date</th>
+                <th>HSN</th>
+                <!-- <th>Qty</th> -->
+                <th>Taxable value</th>
+                <th>CGST Rate</th>
+                <th>CGST Amt.</th>
+                <th>SGST Rate</th>
+                <th>SGST Amt.</th>
+                <th>IGST Rate</th>
+                <th>IGST Amt.</th>
+                <th>Total Value</th>
+            </tr>
+            <template for:each={deliveryChallanLineItems} for:item="item">
+                <tr key={item.id}>
+                    <td>{item.id}</td>
+                    <td>{item.suDCNumber}</td>
+                    <td>{item.productName}</td>
+                    <td>{item.dia}</td>
+                    <td>{item.length}</td>
+                    <td>{item.description}</td>
+                    <td>{item.batchNumber}</td>
+                    <td>{item.serialNumber}</td>
+                    <td>{item.mfgDate}</td>
+                    <td>{item.expiryDate}</td>
+                    <td>{item.hsn}</td>
+                    <!-- <td>{item.quantity}</td> -->
+                    <td>{item.taxableValue}</td>
+                    <td>{item.CGSTRate}%</td>
+                    <td>{item.CGSTAmount}</td>
+                    <td>{item.SGSTRate}%</td>
+                    <td>{item.SGSTAmount}</td>
+                    <td>{item.IGSTRate}%</td>
+                    <td>{item.IGSTAmount}</td>
+                    <td>{item.totalValue}</td>
+                </tr>
+            </template>
+
+            <tr class="total-row">
+                <td colspan="11" class="text-right font-bold">Total</td>
+                <td>{totalTaxableValue}</td>
+                <td>{totalCGSTRate}%</td>
+                <td>{totalCGSTAmount}</td>
+                <td>{totalSGSTRate}%</td>
+                <td>{totalSGSTAmount}</td>
+                <td>{totalIGSTRate}%</td>
+                <td>{totalIGSTAmount}</td>
+                <td>{totalFinalValue}</td>
+            </tr>
+        </table>
+
+        <div class="amount-words">
+            <strong>Amount (In Words) : {amountInWords}</strong> 
+        </div>
+        <!-- <div class="note">
+            <strong>All the products shipped are STERILE</strong>
+            <br>
+            Goods once sold are not returnable.
+        </div> -->
+
+        <!-- Footer Section as per screenshot -->
+        <div class="footer-section">
+            <div style="display: flex; border-bottom: 1px solid #000;">
+                <div
+                    style="flex: 1; border-right: 1px solid #000; padding: 8px; text-align: center; font-size: 10px; font-weight: bold; background-color: #f0f0f0;">
+                    TOTAL BOX 01 OF 01
+                </div>
+                <div
+                    style="flex: 1; border-right: 1px solid #000; padding: 8px; text-align: center; font-size: 10px; font-weight: bold; background-color: #f0f0f0;">
+                    Size of the Box in mm(LxWxH)
+                </div>
+                <div
+                    style="flex: 1; border-right: 1px solid #000; padding: 8px; text-align: center; font-size: 10px; font-weight: bold; background-color: #f0f0f0;">
+                    Gross Wt.(KG)
+                </div>
+                <div
+                    style="flex: 1; padding: 8px; text-align: center; font-size: 10px; font-weight: bold; background-color: #f0f0f0;">
+                    Net Wt.(KG)
+                </div>
+            </div>
+            <div style="display: flex; border-bottom: 1px solid #000;">
+                <div style="flex: 1; border-right: 1px solid #000; padding: 8px; text-align: center; font-size: 10px;">
+
+                </div>
+                <div style="flex: 1; border-right: 1px solid #000; padding: 8px; text-align: center; font-size: 10px;">
+                    -
+                </div>
+                <div style="flex: 1; border-right: 1px solid #000; padding: 8px; text-align: center; font-size: 10px;">
+                    0
+                </div>
+                <div style="flex: 1; padding: 8px; text-align: center; font-size: 10px;">
+                    0
+                </div>
+            </div>
+            <div class="footer-content">
+                <div class="footer-left">
+                    <div style="margin-bottom: 8px;"><strong>For Reference No. please refer Product Catalogue.</strong>
+                    </div>
+                    <div style="margin-bottom: 8px;">It will be sole responsibility of the Consignee to monitor non use
+                        of expired product.</div>
+                    <div style="margin-bottom: 8px;"><strong>Subject to Ahmedabad Jurisdiction.</strong></div>
+                    <div style="margin-bottom: 8px;"><strong>Goods once sold are not returnable.</strong></div>
+                    <div style="margin-bottom: 8px;">Our risk and responsibility cease once the goods leave our
+                        premises.</div>
+                    <div style="margin-bottom: 8px;">Claim for any loss in the consignment should be settled by the
+                        buyer directly with the carrier.</div>
+                    <div style="margin-bottom: 8px;"><strong>Declaration :</strong></div>
+                    <div>We declare that this invoice shows that actual price of the goods described and that all
+                        particulars are true and correct</div>
+                </div>
+                <div class="footer-right">
+                    <div class="signature-section">
+                        <div><strong>Receiver Signature</strong></div>
+                        <div style="height: 40px;"></div>
+                    </div>
+                    <div class="signature-section">
+                        <div><strong>Authorised Signatory.</strong></div>
+                        <!-- <div class="company-seal">
+                            GOWELL<br>
+                            HEALTHTECH
+                        </div> -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="download-btn" onclick={handleDownloadPDF}>
+            Download Delivery Challan
+    </button>
+</template>

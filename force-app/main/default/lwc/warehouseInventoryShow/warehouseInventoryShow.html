@@ -1,0 +1,22 @@
+<template>
+    <div class="slds-p-around_medium slds-box slds-theme_default" style="border-radius: 1rem;">
+        <!-- Filter Section -->
+        <lightning-card title="Inventory" icon-name="standard:product">
+            <div class="slds-grid slds-grid_align-end slds-m-bottom_medium">
+                <lightning-combobox label="Filter by Status" value={selectedStatus} options={statusOptions}
+                    onchange={handleStatusOptionsChange} class="slds-m-bottom_small">
+                </lightning-combobox>
+            </div>
+
+            <template if:true={data.length}>
+                <lightning-datatable key-field="productName" data={data} columns={columns}  column-widths-mode="auto" hide-checkbox-column="true">
+                </lightning-datatable>
+            </template>
+            <template if:false={data.length}>
+                <div class="slds-align_absolute-center slds-text-heading_small slds-p-around_medium">
+                    No inventory data available.
+                </div>
+            </template>
+        </lightning-card>
+    </div>
+</template>

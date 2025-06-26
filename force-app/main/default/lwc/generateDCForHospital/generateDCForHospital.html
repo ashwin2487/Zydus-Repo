@@ -1,0 +1,120 @@
+<template>
+    <lightning-card title="Create Delivery Challan">
+        <div class="slds-p-around_medium">
+            <template if:true={showHospDCPage}>
+
+                <!-- Header Fields -->
+                <lightning-input type="text" label="Delivery Challan Number" value={deliveryChallanNumber}
+                    disabled></lightning-input>
+                <lightning-input type="text" label="Consignor Distributor" value={consignorDistributor}
+                    disabled></lightning-input>
+
+                <!-- Hospital Picker -->
+                <lightning-combobox name="consigneeHospital" label="Consignee Hospital" options={hospitalOptions}
+                    value={consigneeHospital} placeholder="Select Hospital" onchange={handleHospitalChange} required>
+                </lightning-combobox>
+
+                <!-- Product List -->
+                <ul class="slds-list_vertical slds-list_vertical-space slds-m-top_medium">
+                    <template for:each={products} for:item="prod">
+                        <li key={prod.key} class="slds-list__item">
+                            <div
+                                class="slds-box slds-grid slds-grid_align-spread slds-p-around_small slds-m-bottom_medium">
+                                <span class="slds-text-heading_small">
+                                    <strong>{prod.product}</strong> — Qty: {prod.quantity}
+                                    <template if:true={prod.warehouseName}>
+                                        <small>({prod.warehouseName})</small>
+                                    </template>
+                                </span>
+                                <div class="slds-button-group" role="group">
+                                    <lightning-button-icon icon-name="utility:edit" alternative-text="Edit"
+                                        data-index={prod.key} onclick={handleEditProduct} class="slds-m-right_small">
+                                    </lightning-button-icon>
+                                    <lightning-button-icon icon-name="utility:delete" alternative-text="Remove"
+                                        data-index={prod.key} onclick={removeProductRow}>
+                                    </lightning-button-icon>
+                                </div>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
+
+                <!-- Add & Save Buttons -->
+                <lightning-button variant="neutral" label="Add Product" icon-name="utility:add"
+                    onclick={handleAddProduct} class="slds-m-top_large slds-m-right_small">
+                </lightning-button>
+
+                <lightning-button variant="brand" label="Save Challan" onclick={saveChallan} class="slds-m-top_medium">
+                </lightning-button>
+
+            </template>
+
+            <template if:false={showHospDCPage}>
+                <div class="slds-box slds-theme_alert-texture slds-theme_success slds-m-around_medium" role="alert">
+                    <div class="slds-media slds-media_center">
+                        <div class="slds-media__figure">
+                            <lightning-icon icon-name="utility:success" alternative-text="Success" variant="success"
+                                size="small">
+                            </lightning-icon>
+                        </div>
+                        <div class="slds-media__body">
+                            <p class="slds-text-body_regular">
+                                {message}
+                                &nbsp;
+                                <a class="slds-text-link" onclick={handleCreateDCClick}>Create another DC</a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+        </div>
+    </lightning-card>
+
+    <!-- Add/Edit Product Modal -->
+    <template if:true={isModalOpen}>
+        <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+            <div class="slds-modal__container" style="width: 70vw; max-width: 70vw; margin: auto; position: relative;">
+                <!-- Modal Header -->
+                <header class="slds-modal__header">
+                    <lightning-button-icon icon-name="utility:close" alternative-text="Close" onclick={closeModal}
+                        class="slds-modal__close">
+                    </lightning-button-icon>
+                    <h2 class="slds-text-heading_medium">{modalTitle}</h2>
+                </header>
+
+                <!-- Modal Body -->
+                <div class="slds-modal__content slds-p-around_medium">
+                    <lightning-combobox name="product" label="Select Product" options={productOptions}
+                        value={currentProduct.product} onchange={handleModalFieldChange} required>
+                    </lightning-combobox>
+
+                    <lightning-combobox name="warehouse" label="Warehouse" options={warehouseOptions}
+                        value={currentProduct.warehouse} onchange={handleModalFieldChange} class="slds-m-bottom_medium"
+                        required>
+                    </lightning-combobox>
+
+                    <p><span style="color: red;">*</span>Available Product</p>
+                    <template if:true={hasLineItems}>
+                        <lightning-datatable key-field="Id" label="Available Product" data={warehouseLineItems}
+                            columns={lineItemsColumn} selected-rows={selectedRows} onrowselection={handleRowSelection}>
+                        </lightning-datatable>
+                    </template>
+
+
+                    <template if:false={hasLineItems}>
+                        <p class="slds-text-color_weak slds-align_absolute-center">No Product Available</p>
+                    </template>
+                </div>
+
+                <!-- Modal Footer -->
+                <footer class="slds-modal__footer">
+                    <lightning-button label="Cancel" onclick={closeModal} class="slds-m-right_small"></lightning-button>
+                    <lightning-button variant="brand" label={modalActionLabel} onclick={saveProduct}></lightning-button>
+                </footer>
+            </div>
+        </section>
+        <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+
+</template>

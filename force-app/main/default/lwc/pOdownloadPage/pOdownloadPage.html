@@ -1,0 +1,162 @@
+<template>
+    <div class="invoice-container">
+        <!-- Header Section -->
+        <!-- <div class="invoice-header">
+            <div class="company-details">
+                <div class="company-name">{consigneeName}</div>
+                <div class="company-address">
+                    {consigneeAddress}<br>
+                    {consigneeCity}, {consigneeState} - {consigneePinCode}
+                </div>
+            </div>
+        </div> -->
+
+        <div class="challan-title-box">
+            <span class="challan-title-text">PURCHASE ORDER</span>
+        </div>
+
+        <!-- Bill To Section -->
+        <div class="bill-to-section">
+            <div class="bill-to-left">
+                <div class="section-title">Consignee Bill From :-</div>
+                <div class="address-block">
+                    <strong>{consigneeName}</strong><br>
+                    {consigneeAddress}<br>
+                    {consigneeCity}, {consigneeState} - {consigneePinCode}
+                </div>
+                <div class="gst-row">
+                    <span><strong>GSTIN No. :-</strong></span>
+                    <span>{consigneeGstNumber}</span>
+                </div>
+                <div class="gst-row">
+                    <span><strong>PAN :-</strong></span>
+                    <span>{consigneePanNumber}</span>
+                </div>
+                <div class="gst-row">
+                    <span><strong>DL No. :-</strong></span>
+                    <span>{consigneeDLNumber}</span>
+                </div>
+            </div>
+            <div class="bill-to-right">
+                <div class="section-title">Consignor Bill To:-</div>
+                <div class="address-block">
+                    <strong>{consignorName}</strong><br>
+                    {consignorAddress}<br>
+                    {consignorCity}, {consignorState} - {consignorPinCode}<br>
+                    {consignorState}, INDIA
+                </div>
+                <div class="gst-row">
+                    <span><strong>GSTIN No. :-</strong></span>
+                    <span>{consignorGstNumber}</span>
+                </div>
+                <div class="gst-row">
+                    <span><strong>PAN :-</strong></span>
+                    <span>{consignorPanNumber}</span>
+                </div>
+                <div class="gst-row">
+                    <span><strong>DL No. :-</strong></span>
+                    <span>{consignorDLNumber}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Table -->
+        <table class="product-table">
+            <thead>
+                <tr>
+                    <th>Sr.No.</th>
+                    <th>Product Name</th>
+                    <th>Diameter</th>
+                    <th>Length</th>
+                    <th>HSN</th>
+                    <th>Quantity</th>
+                    <th>Taxable value</th>
+                    <th>CGST<br>Rate</th>
+                    <th>CGST<br>Amt</th>
+                    <th>SGST<br>Rate</th>
+                    <th>SGST<br>Amt</th>
+                    <th>IGST<br>Rate</th>
+                    <th>IGST<br>Amt</th>
+                    <th>Total Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template for:each={purchaseOrderProducts} for:item="product">
+                    <tr key={product.id}>
+                        <td>1</td>
+                        <td class="description-col">{product.productName}</td>
+                        <td>{product.diameter}</td>
+                        <td>{product.length}</td>
+                        <td>{product.hsn}</td>
+                        <td>{product.quantity}</td>
+                        <td>{product.unitPrice}</td>
+                        <td>{product.CGSTRate}%</td>
+                        <td>{product.CGSTAmount}</td>
+                        <td>{product.SGSTRate}%</td>
+                        <td>{product.SGSTAmount}</td>
+                        <td>{product.IGSTRate}%</td>
+                        <td>{product.IGSTAmount}</td>
+                        <td>{product.totalAmount}</td>
+                    </tr>
+                </template>
+                <tr class="total-row">
+                    <td colspan="6"><strong>Total</strong></td>
+                    <td><strong>{totalTaxableValue}.00</strong></td>
+                    <!-- <td><strong>{totalCGSTRate}%</strong></td> -->
+                    <td colspan="2"><strong>{totalCGSTAmount}.00</strong></td>
+                    <!-- <td><strong>{totalSGSTRate}%</strong></td> -->
+                    <td colspan="2"><strong>{totalSGSTAmount}.00</strong></td>
+                    <!-- <td>{totalIGSTRate}%</td> -->
+                    <td colspan="2"><strong>{totalIGSTAmount}.00</strong></td>
+                    <td><strong>{totalFinalValue}.00</strong></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Amount in Words -->
+        <div class="amount-words">
+            <span class="amount-words-title">Amount (In Words) :</span> {amountInWords}<br>
+            All the products shipped are STERILE<br>
+            Goods once sold are not returnable. <br>
+            <span class="amount-words-title">Comments & Remarks :</span> {comment}<br>
+        </div>
+
+        <!-- Shipping Terms and Signature -->
+        <div class="shipping-terms">
+            <div class="shipping-details">
+                <div class="section-title">Payment Terms :-</div>
+                <ul class="terms-list">
+                    <li>Interest will be recovered @2% p.a. on overdue unpaid bills.</li>
+                    <li><strong>Shipping Instructions:</strong></li>
+                    <li>Avoid exposure to direct sunlight or heaters & Keep the products in a clean, organized cold and
+                        dry place</li>
+                    <li>For Reference No please refer Product Catalogue</li>
+                    <li>It will be sole responsibility of the Consignee to monitor non use of expired product.</li>
+                    <li>Subject to Ahmedabad Jurisdiction.</li>
+                    <li>Goods once sold are not returnable.</li>
+                    <li>Our risk and responsibility cease once the goods leave our premises.</li>
+                    <li>Claim for any loss in the consignment should be settled by the buyer directly with the carrier.
+                    </li>
+                    <li><strong>Declaration :</strong></li>
+                    <li>We declare that this invoice shows the actual price of the goods described and that all
+                        particulars are true and correct</li>
+                    <li><strong>E&OE</strong></li>
+                </ul>
+            </div>
+            <div class="signature-section">
+                <div class="signature-areas">
+                    <div>
+                        <div class="signature-area">Receiver Signature</div>
+                        <div class="signature-label">Receiver Signature</div>
+                    </div>
+                    <div>
+                        <div class="signature-area">Authorised Signatory</div>
+                        <div class="signature-label">Authorised Signatory</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- <button class="download-btn">Download PDF</button> -->
+     <button class="download-btn" onclick={handleDownloadPDF}>Download PDF</button>
+</template>

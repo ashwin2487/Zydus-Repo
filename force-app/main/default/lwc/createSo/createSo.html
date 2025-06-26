@@ -1,0 +1,67 @@
+<template>
+    <lightning-card title="Create Supply Order">
+        <div class="table-scroll-wrapper slds-m-around_medium" style="overflow-x: auto;">
+            <table class="slds-table slds-table_bordered slds-table_cell-buffer" style="min-width: 1000px;">
+                <thead>
+                    <tr class="slds-line-height_reset">
+                        <th></th>
+                        <th>Product</th>
+                        <th>HSN Code</th>
+                        <th>Unit Price</th>
+                        <th>Requested Qty</th>
+                        <th>Pending Qty</th>
+                        <th>Available Qty</th>
+                        <th>Warehouse</th>
+                        <th>CGST</th>
+                        <th>SGST</th>
+                        <th>IGST</th>
+                        <th>Net Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template for:each={lineItems} for:item="item">
+                        <tr key={item.lineItemId}>
+                            <td>
+                                <lightning-input
+                                    type="checkbox"
+                                    data-id={item.lineItemId}
+                                    checked={item.isSelected}
+                                    onchange={handleCheckboxChange}>
+                                </lightning-input>
+                            </td>
+                            <td>{item.productName}</td>
+                            <td>{item.hsnCode}</td> 
+                            <td>{item.UnitPriceFormatted}</td>
+                            <td>{item.requestedQty}</td>
+                            <td>{item.pendingQty}</td>
+                            <td>{item.AvailableQty}</td>
+                            <td>
+                                <lightning-combobox
+                                    name="warehouse"
+                                    data-id={item.lineItemId}
+                                    value={item.SelectedWarehouse}
+                                    options={item.warehouseOptions}
+                                    onchange={handleWarehouseChange}>
+                                </lightning-combobox>
+                            </td>
+                            <td>{item.CGSTAmountFormatted}</td>
+                            <td>{item.SGSTAmountFormatted}</td>
+                            <td>{item.IGSTAmountFormatted}</td>
+                            <td>{item.NetAmountFormatted}</td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Centered button at the bottom -->
+        <div class="slds-align_absolute-center slds-m-around_medium">
+            <lightning-button
+                variant="brand"
+                label="Create Supply Order"
+                onclick={handleCreateSO}
+                disabled={isCreateDisabled}>
+            </lightning-button>
+        </div>
+    </lightning-card>
+</template>

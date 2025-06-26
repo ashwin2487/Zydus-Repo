@@ -1,0 +1,576 @@
+<template>
+    <lightning-card>
+        <lightning-radio-group name="onboardingType" label="Select Onboarding Type" options={onboardingOptions}
+            value={selectedOnboardingType} type="radio" onchange={handleOnboardingTypeChange} 
+            class="slds-m-left_medium">
+        </lightning-radio-group>
+    </lightning-card>
+
+    <!-- Distributor Onboarding Form -->
+    <template if:true={isDistributorSelected}>
+        <lightning-card title="Distributor Onboarding Form">
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Loading..." size="medium"></lightning-spinner>
+            </template>
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Dealer Basic Information</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Distributor Business Name" value={distributorName}
+                            onchange={handleDistributorNameChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox name="distributorType" label="Distributor Type"
+                            value={selectedDistributorType} placeholder="Select Type" options={distributorTypeOptions}
+                            onchange={handleSelectDTChange} required>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Super Distributor" value={selectedSuperDistributor}
+                            options={superDistributorOptions} onchange={handleSUPDSelection} disabled={isSDMDisabled}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Distributor Mapping" value={selectedDistributor}
+                            options={distributorOptions} onchange={handleDistributorChange} disabled={isDMDisabled}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Drug Licence Number" value={drugLicenceNumber}
+                            onchange={handleDrugLicenceNumberChange} data-id="drugLicenceInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="date" label="Valid Till Date" value={validTillDate}
+                            onchange={handleValidTillDateChange} data-id="validTillDateInput" required>
+                        </lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Distributor Billing Address</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-textarea label="Address" name="Address" value={address}
+                            onchange={handleAddressChange} required rows="3">
+                        </lightning-textarea>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="city" name="city" value={city} onchange={handleCityChange}
+                            data-id="cityInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox name="State" label="State" value={selectedState} placeholder="Select State"
+                            options={stateOptions} onchange={handleStateChange} required>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="text" label="pin" name="pin" value={pin} onchange={handlePinChange}
+                            data-id="pinInput" required>
+                        </lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Distributor Shipping Address</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-textarea label="Address" name="Address" value={shipAddress}
+                            onchange={handleShipAddressChange} required rows="3">
+                        </lightning-textarea>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="city" name="city" value={shipCity} data-id="shipCityInput"
+                            onchange={handleShipCityChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox name="State" label="State" value={selectedShipState}
+                            placeholder="Select State" options={stateOptions} onchange={handleShipStateChange} required>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="text" label="pin" name="pin" value={shipPin} data-id="shipPinInput"
+                            onchange={handleShipPinChange} required>
+                        </lightning-input>
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-1 slds-m-top_small">
+                        <lightning-input type="checkbox" label="Shipping address same as billing"
+                            onchange={handleShippingSameAsBilling} checked={isShippingSame}>
+                        </lightning-input>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Contact Details</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="First Name" name="firstName" value={firstName}
+                            onchange={handleFirstNameChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Last Name" name="lastName" value={lastName}
+                            onchange={handleLastNameChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="email" label="Contact Person Email" name="email" value={email}
+                            onchange={handleEmailChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="tel" label="Mobile Number" name="mobile" value={mobile}
+                            data-id="mobileInput" onchange={handleMobileChange} required>
+                        </lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Bank Details</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="text" label="Account Number" name="accountNumber" value={accountNumber}
+                            onchange={handleAccountNumberChange} data-id="accountNumberInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="text" label="IFSC Code" name="ifsc" value={ifsc}
+                            onchange={handleIFSCChange} data-id="ifscInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="text" label="Bank Name" name="bankName" value={bankName}
+                            onchange={handleBankNameChange} data-id="bankNameInput" required>
+                        </lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Other Commercial Details</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="PAN Number" value={panNumber} onchange={handlePanNumberChange}
+                            data-id="panInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="GST Number" value={gstNumber} onchange={handleGSTNumberChange}
+                            data-id="gstInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Pricebook Mapping" value={selectedPriceBook}
+                            options={pricebookOptions} onchange={handlePriceBookChange} required>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Credit Limit Amount" value={creditLimitDisplay}
+                            onchange={handleCreditLimitChange} onfocus={handleFocus} onblur={handleBlur} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="date" label="Start Date" data-id="creditStartDateInput"
+                            value={creditStartDate} onchange={handleStartDateChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="date" label="End Date" value={creditEndDate}
+                            onchange={handleEndDateChange} data-id="creditEndDateInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="number" label="Payment Term(In Days)" value={paymentTerm} onchange={handlePaymentTermChange}
+                            data-id="paymentTerm" placeholder="Enter payment term in days..." required>
+                        </lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <lightning-dual-listbox label="Hospital Mapping" source-label="Available" selected-label="Selected"
+                options={hospitalOptions} value={selectedHospitals} onchange={handleHospitalChange}>
+            </lightning-dual-listbox>
+
+
+            <div class="slds-grid slds-wrap slds-gutters">
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-combobox label="Zydus Mapping" value={zydusMapping} options={zydusOptions}
+                        onchange={handleZydusMappingChange} required>
+                    </lightning-combobox>
+                </div>
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-combobox label="Sales Rep Position" value={salesRep} options={salesRepOptions}
+                        onchange={handleSalesRepChange} required>
+                    </lightning-combobox>
+                </div>
+            </div>
+            <div class="slds-grid slds-m-top_medium slds-align_absolute-center slds-wrap">
+                <!-- Distributor ID on the left -->
+                <div class="slds-col slds-size_1-of-2 slds-text-align_left">
+                    <lightning-input class="distributor-id-input" label="Distributor ID" value={distributorId}
+                        disabled></lightning-input>
+                </div>
+
+                <!-- Upload button and text on the right -->
+                <div class="slds-col slds-size_1-of-2 slds-m-top_large">
+                    <lightning-button-icon icon-name="utility:upload" alternative-text="Upload"
+                        title="Upload Necessary Documents" onclick={openUploadModal}>
+                    </lightning-button-icon>
+                    <span class="slds-p-left_small" style="cursor: pointer;" onclick={openUploadModal}>
+                        Upload Necessary Documents
+                    </span>
+                </div>
+            </div>
+            <div class="slds-text-align_center slds-m-top_medium">
+                <lightning-button variant="neutral" label="Close" onclick={closeDistributorOnboarding}
+                    class="slds-m-right_small">
+                </lightning-button>
+                <lightning-button variant="brand" label="Submit Onboarding"
+                    onclick={handleSubmitDistributorForApproval}>
+                </lightning-button>
+            </div>
+
+        </lightning-card>
+    </template>
+
+    <!-- Hospital Onboarding Form -->
+    <template if:true={isHospitalSelected}>
+        <lightning-card title="Hospital Onboarding Form">
+
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Loading..." size="medium"></lightning-spinner>
+            </template>
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Basic Information</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Hospital Name" required value={hospitalName}
+                            onchange={handleHospNameChange} data-id="hospitalName">
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Registration Number" value={hospRegistrationNumber}
+                            onchange={handleHospRegNoChange} data-id="registrationNumber">
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Group" value={hospGroup} options={hospitalOptions}
+                            onchange={handlehospGroupChange} data-id="hospGroup" placeholder="Select Parent Hospital">
+                        </lightning-combobox>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Contact Details</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="First Name" value={firstName} onchange={handleFirstNameChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Last Name" value={lastName} onchange={handleLastNameChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="email" label="Email" value={email} onchange={handleEmailChange} required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="email" label="CC Email" value={ccEmail} onchange={handleCCEmailChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="tel" label="Mobile Number" value={mobile} data-id="mobileInput"
+                            onchange={handleMobileChange}>
+                        </lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Billing Address</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-textarea label="Billing Address" value={billingAddress}
+                            onchange={handleBillingAddressChange} data-id="billingAddress" required>
+                        </lightning-textarea>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="City" value={city} onchange={handleCityChange} data-id="cityInput"
+                            required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox name="State" label="State" value={selectedState} placeholder="Select State"
+                            options={stateOptions} onchange={handleStateChangeForHosp} required>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="text" label="PIN" value={pin} onchange={handlePinChange}
+                            data-id="pinInput" required>
+                        </lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Shipping Address</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Ship Title" value={shipTitle} onchange={handleShipTitleChange}
+                            data-id="shipTitle" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox name="State" label="State" value={selectedShipState}
+                            placeholder="Select State" options={stateOptions} onchange={handleShipStateChange} required>
+                        </lightning-combobox>
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-textarea label="Shipping Address" value={shippingAddress}
+                            onchange={handleShippingAddressChange} data-id="shippingAddress" required>
+                        </lightning-textarea>
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="City" value={shipCity} onchange={handleShipCityChange}
+                            data-id="shipCityInput" required>
+                        </lightning-input>
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="text" label="PIN" value={shipPin} onchange={handleShipPinChange}
+                            data-id="shipPinInput" required>
+                        </lightning-input>
+                    </div>
+                </div>
+                <div class="slds-col slds-size_1-of-1 slds-m-top_small">
+                    <lightning-input type="checkbox" label="Shipping address same as billing"
+                        onchange={handleShippingSameAsBilling} checked={isShippingSame}>
+                    </lightning-input>
+                </div>
+
+            </div>
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Mapping Information</h2>
+
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-1 slds-m-bottom_medium">
+                        <lightning-combobox name="superDistributor" label="Super Distributor"
+                            placeholder="Select Super Distributor" options={HOBsuperDistributorOptionsHOB}
+                            value={HOBselectedSuperDistributorHOBValue} onchange={HOBhandleSuperDistributorChange}
+                            disabled={isSuperDistributorDisabledHOB}>
+                        </lightning-combobox>
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-1 slds-m-bottom_medium">
+                        <lightning-combobox name="distributor" label="Distributor" placeholder="Select Distributor"
+                            options={HOBdistributorOptionsHOB} value={HOBselectedDistributorHOBValue}
+                            onchange={HOBhandleDistributorChange} disabled={isDistributorDisabledHOB}>
+                        </lightning-combobox>
+                    </div>
+
+                    <div class="slds-col slds-size_1-of-1 slds-m-bottom_medium">
+                        <lightning-combobox name="subDistributor" label="Sub Distributor"
+                            placeholder="Select Sub Distributor" options={HOBsubDistributorOptionsHOB}
+                            value={HOBselectedSubDistributorHOBValue} onchange={HOBhandleSubDistributorChange}
+                            disabled={isSubDistributorDisabledHOB}>
+                        </lightning-combobox>
+                    </div>
+                </div>
+
+                <div class="slds-grid slds-wrap slds-gutters slds-m-top_medium slds-m-left_xx-small">
+                    <template if:true={HOBselectedSuperDistributorHOB}>
+                        <div class="slds-col slds-size_1-of-1 slds-m-bottom_x-small">
+                            <strong class="slds-m-right_x-small">Selected Super Distributor:</strong>
+                            <lightning-pill label={HOBselectedSuperDistributorHOB.label} name="super"
+                                onclick={HOBhandleRemovePill} variant="light">
+                                <lightning-icon icon-name="standard:account"
+                                    alternative-text="account"></lightning-icon>
+                            </lightning-pill>
+                        </div>
+                    </template>
+
+                    <template if:true={HOBselectedDistributorHOB}>
+                        <div class="slds-col slds-size_1-of-1 slds-m-bottom_x-small">
+                            <strong class="slds-m-right_x-small">Selected Distributor:</strong>
+                            <lightning-pill label={HOBselectedDistributorHOB.label} name="distributor"
+                                onclick={HOBhandleRemovePill} variant="light">
+                                <lightning-icon icon-name="standard:account"
+                                    alternative-text="account"></lightning-icon>
+                            </lightning-pill>
+                        </div>
+                    </template>
+
+                    <template if:true={HOBselectedSubDistributorHOB}>
+                        <div class="slds-col slds-size_1-of-1 slds-m-bottom_x-small">
+                            <strong class="slds-m-right_x-small">Selected Sub Distributor:</strong>
+                            <lightning-pill label={HOBselectedSubDistributorHOB.label} name="subDistributor"
+                                onclick={HOBhandleRemovePill} variant="light">
+                                <lightning-icon icon-name="standard:account"
+                                    alternative-text="account"></lightning-icon>
+                            </lightning-pill>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="slds-grid slds-wrap slds-gutters">
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-combobox label="Pricebook Mapping" value={selectedPriceBook} options={pricebookOptions}
+                        onchange={handlePriceBookChange} required>
+                    </lightning-combobox>
+                </div>
+            </div>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Other Commercial Details</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="PAN Number" value={panNumber} onchange={handlePanNumberChange}
+                            data-id="panInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="GST Number" value={gstNumber} onchange={handleGSTNumberChange}
+                            data-id="gstInput" required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="DL No (Drug License Number)" value={dlNo} onchange={handleDLChange}
+                            data-id="dlInput">
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="DL Expiry Date" type="date" value={dlExpiryDate}
+                            onchange={handleDlExpiryDateChange} data-id="dlExpiryDateInput">
+                        </lightning-input>
+                    </div>
+
+                </div>
+            </div>
+
+            <lightning-dual-listbox label="Product Mapping" source-label="Available" selected-label="Selected"
+                options={productOptions} value={selectedProducts} onchange={handleProductChange}>
+            </lightning-dual-listbox>
+
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <h2 class="slds-text-heading_small">Operational Details</h2>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Doctor Name" value={doctorName} onchange={handleDoctorNameChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input type="number" label="Payment Term(In Days)" value={paymentTerm} onchange={handlePaymentTermChange}
+                            data-id="paymentTerm" placeholder="Enter payment term in days..." required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-textarea label="Default Comment" value={invoiceComment}
+                            onchange={handleInvoiceCommentChange}>
+                        </lightning-textarea>
+                    </div>
+                        <div class="slds-col slds-size_1-of-2">
+                            <lightning-combobox name="Select Comment Options Level" label="Select Comment Options Level"
+                                placeholder="Select Comment Options Level" options={commentOptions}
+                                onchange={handleCommentOptionsChange} required>
+                            </lightning-combobox>
+                            <template if:true={commentOptionSelected.length}>
+                                <div class="slds-m-top_small">
+                                    <h3><strong>Selected Comment Level</strong></h3>
+                                    <div class="slds-pill_container" style="background-color: transparent; border:none">
+                                        <template for:each={commentOptionSelected} for:item="commentoption">
+                                            <span key={commentoption.value}
+                                                class="slds-pill custom-pill slds-m-right_x-small slds-p-right_small">
+                                                <span
+                                                    class="slds-pill__label custom-pill-label">{commentoption.label}</span>
+                                                <lightning-button-icon icon-name="utility:close"
+                                                    alternative-text="Remove" variant="bare"
+                                                    class="slds-m-left_x-small custom-pill-close"
+                                                    data-value={commentoption.value}
+                                                    onclick={handleCommentOptionsRemove}>
+                                                </lightning-button-icon>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            <div class="slds-box slds-theme_default slds-m-top_medium">
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input label="Hospital ID" value={hospitalId} disabled required>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-input  label="Phyzii Hopital Id" value={phyziiId} onchange={handlephyziiIdChange} required></lightning-input >
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-text-align_center slds-m-top_medium">
+                <lightning-button variant="neutral" label="Close" onclick={closeHospitalOnboarding}
+                    class="slds-m-right_small">
+                </lightning-button>
+                <lightning-button variant="brand" label="Submit Onboarding" onclick={handleSubmitHospitalForApproval}>
+                </lightning-button>
+            </div>
+        </lightning-card>
+    </template>
+
+    <template if:true={isUploadModalOpen}>
+        <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open">
+            <div class="slds-modal__container">
+                <header class="slds-modal__header">
+                    <h2 class="slds-modal__title">Upload Required Documents</h2>
+                </header>
+                <div class="slds-modal__content slds-p-around_medium">
+                    <template for:each={documentUploads} for:item="doc">
+                        <div key={doc.key} class="slds-m-bottom_medium">
+                            <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                                <div class="slds-col">
+                                    <lightning-input type="file" label={doc.label} onchange={handleFileUpload}
+                                        data-key={doc.key} data-id={doc.dataId}>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-p-left_small">
+                                    <template if:true={doc.fileName}>
+                                        <div class="slds-grid slds-grid_vertical-align-center">
+                                            <span class="slds-text-body_small">📄 {doc.fileName}</span>
+                                            <lightning-button-icon icon-name="utility:delete"
+                                                alternative-text="Remove file" onclick={removeFile} data-key={doc.key}
+                                                class="slds-m-left_x-small" title="Remove file">
+                                            </lightning-button-icon>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <lightning-input type="checkbox" label={doc.checkboxLabel} checked={doc.confirmed} disabled>
+                            </lightning-input>
+                        </div>
+                    </template>
+                </div>
+                <footer class="slds-modal__footer">
+                    <lightning-button label="Cancel" onclick={closeUploadModal}
+                        class="slds-m-right_medium"></lightning-button>
+                    <lightning-button variant="brand" label="Next" onclick={validateAndCloseModal}></lightning-button>
+                </footer>
+            </div>
+        </section>
+        <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+</template>
