@@ -1,0 +1,110 @@
+<template>
+    <!-- Header -->
+    <div class="slds-grid slds-grid_align-spread slds-p-around_medium">
+        <h2 class="slds-text-heading_medium">Renewal Status</h2>
+    </div>
+    <hr class="slds-m-vertical_x-small" />
+
+    <!-- Body -->
+    <div class="slds-p-around_medium">
+        
+        <div class="slds-grid slds-align_absolute-center slds-m-bottom_medium">
+            <lightning-radio-group
+                label=""
+                options={radioOptions}
+                value={selectedOption}
+                onchange={handleRadioChange}
+                type="button"
+                variant="container">
+            </lightning-radio-group>
+        </div>
+
+        <template if:true={showExpiryOptions}>
+            <div class="slds-p-around_small">
+                <lightning-radio-group
+                    label="Extension Period"
+                    options={expiryOptions}
+                    value={extension}
+                    onchange={handleExpiryExtension}
+                    required>
+                </lightning-radio-group>
+            </div>
+        </template>
+
+        <template if:true={showTextInput}>
+            <div class="slds-p-around_small">
+                <lightning-textarea
+                    label="Remarks"
+                    value={remarks}
+                    onchange={handleRemarkChange}
+                    placeholder="Enter remarks here"
+                    required>
+                </lightning-textarea>
+            </div>
+        </template>
+
+        <template if:true={showDatePicker}>
+            <div class="slds-p-around_small">
+                <lightning-input
+                    label="Choose Expiry Date"
+                    type="date"
+                    value={expiryDate}
+                    onchange={handleDateChange}
+                    required>
+                </lightning-input>
+            </div>
+        </template>
+
+        <template if:true={showFileUploader}>
+            <div class="slds-p-around_small slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                <div class="slds-col">
+                    <lightning-input
+                        type="file"
+                        label="Upload File"
+                        onchange={handleFileUpload}
+                        data-key="file"
+                        accept=".pdf,.docx,.jpg,.png"
+                        required>
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-p-left_small">
+                    <template if:true={fileName}>
+                        <div class="slds-grid slds-grid_vertical-align-center">
+                            <span class="slds-text-body_small">📄 {fileName}</span>
+                            <lightning-button-icon
+                                icon-name="utility:delete"
+                                alternative-text="Remove file"
+                                onclick={removeFile}
+                                class="slds-m-left_x-small"
+                                title="Remove file">
+                            </lightning-button-icon>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+       
+
+        
+
+        
+    </div>
+
+    <hr class="slds-m-vertical_x-small" />
+
+    <!-- Footer -->
+    <div class="slds-grid slds-grid_align-end slds-p-around_medium">
+        <lightning-button
+            label="Cancel"
+            onclick={handleDLModalClose}
+            variant="brand-outline"
+            class="slds-m-right_medium">
+        </lightning-button>
+        <lightning-button
+            label="Submit"
+            onclick={handleSubmit}
+            variant="brand">
+        </lightning-button>
+    </div>
+</template>

@@ -1,0 +1,27 @@
+<template>
+    <lightning-card title="Hospital Onboarding Form">
+        <div class="slds-p-horizontal_medium slds-p-top_medium">
+            <lightning-input label="Hospital Name" value={hospitalName} onchange={handleInputChange} data-id="hospitalName"></lightning-input>
+            <lightning-input label="Contact Person" value={contactPerson} onchange={handleInputChange} data-id="contactPerson"></lightning-input>
+            <lightning-input label="Email" type="email" value={contactEmail} onchange={handleInputChange} data-id="contactEmail"></lightning-input>
+            <lightning-input label="Mobile" type="tel" value={mobile} onchange={handleInputChange} data-id="mobile"></lightning-input>
+            <lightning-input label="Address" value={address} onchange={handleInputChange} data-id="address"></lightning-input>
+            <lightning-input label="Hospital ID" value={hospitalId} onchange={handleInputChange} data-id="hospitalId"></lightning-input>
+            <lightning-input label="Registration Number" value={registrationNumber} onchange={handleInputChange} data-id="registrationNumber"></lightning-input>
+            <lightning-input label="PAN Number" value={panNumber} onchange={handleInputChange} data-id="panNumber"></lightning-input>
+            <lightning-input label="GST Number" value={gstNumber} onchange={handleInputChange} data-id="gstNumber"></lightning-input>
+
+            <lightning-file-upload
+                label="Upload Registration Document"
+                name="hospitalFileUploader"
+                accept={acceptedFormats}
+                record-id={recordId}
+                multiple>
+            </lightning-file-upload>
+
+            <div class="slds-m-top_medium">
+                <lightning-button variant="brand" label="Submit For Approval" onclick={handleSubmitHospitalForApproval}></lightning-button>
+            </div>
+        </div>
+    </lightning-card>
+</template>

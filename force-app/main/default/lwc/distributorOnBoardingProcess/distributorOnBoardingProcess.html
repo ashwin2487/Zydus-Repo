@@ -1,0 +1,75 @@
+<template>
+    <lightning-card title="Distributor Onboarding Form">
+        <div class="slds-p-horizontal_medium slds-p-top_medium">
+            <lightning-input label="Distributor ID" value={distributorId} disabled></lightning-input>
+            <lightning-input label="Distributor Name" value={distributorName} onchange={handleInputChange}
+                data-id="distributorName"></lightning-input>
+
+            <lightning-combobox name="distributorType" label="Distributor Type" value={selectedDistributorType}
+                options={distributorTypeOptions} onchange={handleDistributorTypeChange} required>
+            </lightning-combobox>
+
+            <lightning-input label="Super Distributor" value={selectedSuperDistributor} onchange={handleInputChange}
+                data-id="selectedSuperDistributor"></lightning-input>
+            <lightning-input label="Sub Distributor" value={selectedSubDistributor} onchange={handleInputChange}
+                data-id="selectedSubDistributor"></lightning-input>
+
+            <lightning-input label="Address" value={Address} onchange={handleInputChange}
+                data-id="Address"></lightning-input>
+            <lightning-input label="City" value={City} onchange={handleInputChange} data-id="City"></lightning-input>
+            <lightning-combobox label="State" value={selectedState} options={stateOptions}
+                onchange={handleSelectStateChange}></lightning-combobox>
+            <lightning-input label="Pin Code" value={Pin} onchange={handleInputChange} data-id="Pin"></lightning-input>
+
+            <lightning-input label="First Name" value={firstName} onchange={handleInputChange}
+                data-id="firstName"></lightning-input>
+            <lightning-input label="Last Name" value={lastName} onchange={handleInputChange}
+                data-id="lastName"></lightning-input>
+            <lightning-input label="Email" type="email" value={email} onchange={handleInputChange}
+                data-id="email"></lightning-input>
+            <lightning-input label="Mobile" type="tel" value={mobile} onchange={handleInputChange}
+                data-id="mobile"></lightning-input>
+
+            <lightning-input label="Account Number" value={accountNumber} onchange={handleInputChange}
+                data-id="accountNumber"></lightning-input>
+            <lightning-input label="IFSC Code" value={ifsc} onchange={handleInputChange}
+                data-id="ifsc"></lightning-input>
+            <lightning-input label="Bank Name" value={bankName} onchange={handleInputChange}
+                data-id="bankName"></lightning-input>
+
+            <lightning-input label="PAN Number" value={panNumber} onchange={handleInputChange}
+                data-id="panNumber"></lightning-input>
+            <lightning-input label="GST Number" value={gstNumber} onchange={handleInputChange}
+                data-id="gstNumber"></lightning-input>
+
+            <lightning-combobox label="Price Book" value={selectedPriceBook} options={priceBookOptions}
+                onchange={handlePriceBookChange}></lightning-combobox>
+            <lightning-input label="Credit Limit" value={creditLimitDisplay} onchange={handleInputChange}
+                data-id="creditLimitDisplay"></lightning-input>
+            <lightning-input label="Credit Start Date" type="date" value={creditStartDate} onchange={handleInputChange}
+                data-id="creditStartDate"></lightning-input>
+            <lightning-input label="Credit End Date" type="date" value={creditEndDate} onchange={handleInputChange}
+                data-id="creditEndDate"></lightning-input>
+
+            <lightning-input label="Sales Representative" value={salesRep} onchange={handleInputChange}
+                data-id="salesRep"></lightning-input>
+
+            <lightning-dual-listbox name="hospitals" label="Map Hospitals" source-label="Available"
+                selected-label="Mapped" options={hospitalOptions} value={selectedHospitals}
+                onchange={handleHospitalChange}>
+            </lightning-dual-listbox>
+
+            <lightning-input label="Zydus Mapping" value={zydusMapping} onchange={handleInputChange}
+                data-id="zydusMapping"></lightning-input>
+
+            <lightning-file-upload label="Upload Supporting Documents" name="fileUploader" accept={acceptedFormats}
+                record-id={recordId} multiple>
+            </lightning-file-upload>
+
+            <div class="slds-m-top_medium">
+                <lightning-button variant="brand" label="Submit For Approval"
+                    onclick={handleSubmitDistributorForApproval}></lightning-button>
+            </div>
+        </div>
+    </lightning-card>
+</template>

@@ -1,0 +1,103 @@
+<template>
+    <lightning-card title="Create Purchase Order" icon-name="standard:orders">
+        <template if:true={isLoading}>
+            <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+        </template>
+        <div class="slds-p-around_medium">
+            <!-- Basic PO Info -->
+            <lightning-input label="Account" value={selectedAccountName} required disabled></lightning-input>
+
+            <lightning-input label="Supplier Distributor" value={selectedSupplierName} required
+                disabled></lightning-input>
+
+            <!-- <lightning-input label="Purchase Order Name" value={poName} required disabled></lightning-input> -->
+
+            <lightning-input label="Pricebook Mapping" value={selectedPriceBook} required disabled
+                class="slds-m-bottom_medium"></lightning-input>
+
+            <template if:true={selectedProducts.length}>
+                <div class="table-scroll-wrapper slds-m-around_medium" style="overflow-x: auto;">
+                    <table class="slds-table slds-table_bordered slds-table_cell-buffer">
+                        <thead>
+                            <tr class="slds-line-height_reset">
+                                <th>#</th>
+                                <th>Product</th>
+                                <th>Unit Price</th>
+                                <th>MRP</th>
+                                <th>Quantity</th>
+                                <th>Bill Discount</th>
+                                <th>Credit Note</th>
+                                <th>Brand Pricing</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template for:each={selectedProducts} for:item="item" for:index="index">
+                                <tr key={item.productId}>
+                                    <td>{item.serial}</td>
+                                    <td>{item.productName}</td>
+                                    <td>{item.unitPrice}</td>
+                                    <td>{item.mrp}</td>
+                                    <td>
+                                        <lightning-input type="number" label="Quantity" variant="label-hidden"
+                                            value={item.minOrderQty} data-index={index} onchange={handleQuantityChange}>
+                                        </lightning-input>
+                                    </td>
+                                    <td>{item.billDiscount}</td>
+                                    <td>{item.creditNote}</td>
+                                    <td>
+                                        <lightning-input type="checkbox" checked={item.useBrandPricing} disabled>
+                                        </lightning-input>
+                                    </td>
+                                    <td>
+                                        <lightning-button-icon icon-name="utility:delete" alternative-text="Delete"
+                                            title="Delete" onclick={handleDeleteProduct} data-id={item.productId}>
+                                        </lightning-button-icon>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </template>
+
+            <template if:true={showAddProduct}>
+                <lightning-combobox label="Select Product" value={selectedProductId} options={productOptions}
+                    onchange={handleProductChange} placeholder="Select a product" class="slds-m-bottom_medium">
+                </lightning-combobox>
+            </template>
+
+            <lightning-button variant="neutral" label="Add Product" icon-name="utility:add" onclick={handleAddProduct}
+                class="slds-m-right_small">
+            </lightning-button>
+
+            <template if:true={showAddEntryButton}>
+                <lightning-button label="Add Price Book Entry" onclick={handleAddPriceBookEntry} variant="brand-outline"
+                    class="slds-m-bottom_medium slds-m-right_small">
+                </lightning-button>
+            </template>
+
+            <lightning-button variant="brand" label="Create Manual Purchase Order" onclick={handleCreateManualPO} disabled={disableCreatePOBtn}>
+            </lightning-button>
+
+            <template if:true={showAddEntryModal}>
+                <div class="slds-box slds-m-top_small slds-theme_default">
+                    <lightning-input label="Selected Product" value={selectedProductName} readonly required
+                        icon-name="standard:product" icon-position="left">
+                    </lightning-input>
+
+                    <lightning-input type="checkbox" label="Use Brand Pricing" checked={newEntry.useBrandPricing}
+                        onchange={handleCheckboxChange} class="slds-m-top_small">
+                    </lightning-input>
+
+                    <div class="slds-m-top_small">
+                        <lightning-button label="Cancel" onclick={toggleInlineForm} class="slds-m-right_small">
+                        </lightning-button>
+                        <lightning-button variant="brand" label="Save Entry" onclick={handleSavePriceBookEntry}>
+                        </lightning-button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

@@ -1,0 +1,9 @@
+.orange-column {
+    background-color: #e79f17; /* light orange */
+    /* color: #d17d00; darker orange text */
+    font-weight: bold;
+}
+.light-red-row {
+    background-color: #c07676; /* Light red background */
+    color: #0b0a0a; /*darker orange text*/
+}

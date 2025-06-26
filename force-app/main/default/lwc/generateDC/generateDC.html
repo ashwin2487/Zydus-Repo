@@ -1,0 +1,21 @@
+<template>
+    <div class="slds-p-around_medium slds-text-align_center">
+        <!-- Warning icon -->
+        <lightning-icon icon-name="utility:warning" alternative-text="Warning" variant="warning" size="large">
+        </lightning-icon>
+
+        <!-- Prompt -->
+        <p class="slds-m-top_small">
+            Are you sure you want to generate a Delivery Challan for the current Sales Order?
+        </p>
+
+        <!-- Action buttons -->
+        <div class="slds-m-top_medium">
+            <lightning-button variant="neutral" label="Cancel" onclick={closeCreateDCModal} class="slds-m-right_small">
+            </lightning-button>
+
+            <lightning-button variant="brand" label="Create Delivery Challan" onclick={createDC}>
+            </lightning-button>
+        </div>
+    </div>
+</template>

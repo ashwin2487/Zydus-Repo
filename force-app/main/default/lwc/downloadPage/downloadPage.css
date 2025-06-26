@@ -1,0 +1,288 @@
+* {
+     margin: 0;
+     padding: 0;
+     box-sizing: border-box;
+ }
+
+ body {
+     font-family: Arial, sans-serif;
+     font-size: 11px;
+     line-height: 1.3;
+     background-color: #f5f5f5;
+     padding: 10px;
+ }
+
+ .slds-modal__container {
+     background: white;
+     padding: 15px;
+     max-width: 1200px;
+     margin: 0 auto;
+ }
+
+ .challan-header {
+     /* border-bottom: 2px solid #000; */
+     /* padding-bottom: 10px;
+     margin-bottom: 10px; */
+     display: flex;
+     justify-content: space-between;
+     align-items: flex-start;
+ }
+
+ .company-logo {
+     flex: 1;
+ }
+
+ .logo-text {
+     font-size: 20px;
+     font-weight: bold;
+     color: #2c5aa0;
+ }
+
+ .company-details {
+     flex: 2;
+     text-align: center;
+     font-size: 10px;
+     line-height: 1.4;
+ }
+
+ .challan-title {
+     flex: 1;
+     text-align: right;
+     font-size: 18px;
+     font-weight: bold;
+     text-decoration: underline;
+ }
+
+ .challan-info-row {
+     display: flex;
+     margin-bottom: 0;
+     gap: 0;
+ }
+
+ .info-block {
+     flex: 1;
+     border: 1px solid #000;
+     padding: 8px;
+     font-size: 10px;
+     line-height: 1.4;
+     border-right: none;
+ }
+
+ .info-block:last-child {
+     border-right: 1px solid #000;
+ }
+
+ .info-title {
+     font-weight: bold;
+     text-decoration: underline;
+     margin-bottom: 5px;
+     font-size: 11px;
+ }
+
+ .challan-table {
+     width: 100%;
+     border-collapse: collapse;
+     margin-bottom: 15px;
+     font-size: 9px;
+ }
+
+ .challan-table td,
+ .challan-table th {
+     border: 1px solid #000;
+     padding: 4px;
+     text-align: center;
+     vertical-align: middle;
+ }
+
+ .challan-table th {
+     background-color: #f0f0f0;
+     font-weight: bold;
+     font-size: 8px;
+ }
+
+ .challan-table tr:first-child td {
+     background-color: #f8f8f8;
+     font-size: 8px;
+     font-weight: bold;
+ }
+
+ .total-row {
+     font-weight: bold;
+     background-color: #f0f0f0;
+ }
+
+ .text-right {
+     text-align: right;
+ }
+
+ .font-bold {
+     font-weight: bold;
+ }
+
+ .amount-words {
+     margin-bottom: 10px;
+     font-size: 11px;
+     font-weight: bold;
+ }
+
+ .note {
+     margin-bottom: 10px;
+     font-size: 10px;
+     text-align: center;
+ }
+
+ /* Footer section styles */
+ .footer-section {
+     border: 1px solid #000;
+     margin-top: 15px;
+ }
+
+ .footer-header {
+     background-color: #f0f0f0;
+     padding: 5px;
+     text-align: center;
+     font-weight: bold;
+     font-size: 10px;
+     border-bottom: 1px solid #000;
+ }
+
+ .footer-content {
+     display: flex;
+     min-height: 150px;
+ }
+
+ .footer-left {
+     flex: 3;
+     border-right: 1px solid #000;
+     padding: 8px;
+     font-size: 9px;
+     line-height: 1.4;
+ }
+
+ .footer-right {
+     flex: 1;
+     display: flex;
+     flex-direction: column;
+ }
+
+ .signature-section {
+     flex: 1;
+     border-bottom: 1px solid #000;
+     padding: 8px;
+     text-align: center;
+     font-size: 9px;
+     display: flex;
+     flex-direction: column;
+     justify-content: space-between;
+ }
+
+ .signature-section:last-child {
+     border-bottom: none;
+ }
+
+ .company-seal {
+     width: 60px;
+     height: 60px;
+     border: 2px solid #2c5aa0;
+     border-radius: 50%;
+     margin: 5px auto;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     font-size: 8px;
+     font-weight: bold;
+     color: #2c5aa0;
+     text-align: center;
+     line-height: 1.1;
+ }
+
+ .terms-list {
+     margin: 0;
+     padding-left: 12px;
+ }
+
+ .terms-list li {
+     margin-bottom: 3px;
+ }
+
+ .download-btn {
+     background-color: #007cba;
+     color: white;
+     padding: 10px 20px;
+     border: none;
+     border-radius: 4px;
+     cursor: pointer;
+     font-size: 12px;
+     display: block;
+     margin: 20px auto 0;
+     margin-bottom: 1rem !important;
+ }
+
+ .download-btn:hover {
+     background-color: #005a87;
+ }
+
+ /* Responsive adjustments */
+ @media (max-width: 768px) {
+     .challan-header {
+         flex-direction: column;
+         text-align: center;
+         gap: 10px;
+     }
+
+     .challan-info-row {
+         flex-direction: column;
+     }
+
+     .challan-table {
+         font-size: 8px;
+     }
+
+     .challan-table th {
+         font-size: 7px;
+     }
+
+     .footer-content {
+         flex-direction: column;
+     }
+
+     .footer-left {
+         border-right: none;
+         border-bottom: 1px solid #000;
+     }
+ }
+
+ /* Print styles */
+ @media print {
+     body {
+         background-color: white;
+         padding: 0;
+     }
+
+     .download-btn {
+         display: none;
+     }
+
+     .slds-modal__container {
+         border: 1px solid #000;
+     }
+ }
+
+ .challan-title-box {
+     border: 2px solid #000;
+     padding: 6px 12px;
+     margin: 10px 0;
+     text-align: center;
+     width: 100%;
+     display: flex;
+     justify-content: center;
+     align-items: center;
+     background-color: #f9f9f9;
+ }
+
+ .challan-title-text {
+     font-weight: bold;
+     font-size: 18px;
+     letter-spacing: 1px;
+     color: #000;
+ }

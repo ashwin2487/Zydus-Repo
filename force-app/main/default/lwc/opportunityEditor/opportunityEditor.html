@@ -1,0 +1,17 @@
+<template>
+    <lightning-modal-header label="Edit Opportunity Line Items"></lightning-modal-header>
+    <lightning-modal-body>
+        <template if:true={lineItems}>
+            <template for:each={lineItems} for:item="item">
+                <div key={item.Id} class="slds-m-around_small">
+                    <lightning-input type="number" label="Quantity" value={item.Quantity} data-id={item.Id} data-field="Quantity" onchange={handleChange}></lightning-input>
+                    <lightning-input type="number" label="Unit Price" value={item.UnitPrice} data-id={item.Id} data-field="UnitPrice" onchange={handleChange}></lightning-input>
+                </div>
+            </template>
+        </template>
+    </lightning-modal-body>
+    <lightning-modal-footer>
+        <lightning-button variant="neutral" label="Cancel" onclick={handleClose}></lightning-button>
+        <lightning-button variant="brand" label="Save" onclick={handleSave}></lightning-button>
+    </lightning-modal-footer>
+</template>
