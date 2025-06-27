@@ -11,6 +11,9 @@ export default class WarehouseInventoryShow extends LightningElement {
     { label: 'Committed', value: 'Committed' },
     { label: 'In Transit', value: 'In Transit' }
   ];
+  @track warehouseIdsToFetch=[];
+  @track warehouseOptions = [];
+  @track selectedWarehouse = 'all';
 
   columns = [
     { label: 'Warehouse', fieldName: 'warehouseName', type: 'text', sortable: true, initialWidth: 200 },
@@ -25,11 +28,8 @@ export default class WarehouseInventoryShow extends LightningElement {
     { label: 'Expiry Date', fieldName: 'expiryDate', type: 'date', sortable: true, initialWidth: 150 },
     { label: 'Expiry Category', fieldName: 'expiryCategory', type: 'text', sortable: true, initialWidth: 150 },
     { label: 'Balance Exp Days', fieldName: 'balanceExpDays', type: 'number', sortable: true, initialWidth: 150 },
-    { label: 'Total Qty', fieldName: 'totalQty', type: 'number', sortable: true, initialWidth: 150 },
     { label: 'Total Value (MRP)', fieldName: 'totalValueMRP', type: 'currency', sortable: true, initialWidth: 150 },
-    { label: 'Expired Qty', fieldName: 'expiredQty', type: 'number', sortable: true, initialWidth: 150 },
     { label: 'Expired Value', fieldName: 'expiredValue', type: 'currency', sortable: true, initialWidth: 150 },
-    { label: 'Usable Qty', fieldName: 'usableQty', type: 'number', sortable: true, initialWidth: 150 },
     { label: 'Usable Value', fieldName: 'usableValue', type: 'currency', sortable: true, initialWidth: 150 },
     { label: 'Last Usage Date', fieldName: 'lastUsageDate', type: 'date', sortable: true, initialWidth: 200 },
     { label: 'Distributor', fieldName: 'distributor', type: 'text', sortable: true, initialWidth: 150 },
@@ -43,8 +43,24 @@ export default class WarehouseInventoryShow extends LightningElement {
   wiredWarehouses({ error, data }) {
     if (data) {
       this.warehouseIds = data.map(w => w.Id);
+      this.warehouseOptions = [
+        { label: 'All', value: 'all' },
+        ...data.map(w => ({ label: w.Name, value: w.Id }))
+      ];
+      this.warehouseIdsToFetch = this.warehouseIds;
       this.fetchInventory();
     }
+  }
+
+  handleWarehouseOptionsChange(e) {
+    this.selectedWarehouse = e.detail.value;
+
+    if(this.selectedWarehouse=='all'){
+      this.warehouseIdsToFetch = this.warehouseIds;
+    }else{
+      this.warehouseIdsToFetch=[this.selectedWarehouse];
+    }
+    this.fetchInventory();
   }
 
   handleStatusOptionsChange(e) {
@@ -53,8 +69,8 @@ export default class WarehouseInventoryShow extends LightningElement {
   }
 
   fetchInventory() {
-    if (!this.warehouseIds?.length) return;
-    getInventoryData({ warehouseIds: this.warehouseIds, statusFilter: this.selectedStatus })
+    if (!this.warehouseIdsToFetch?.length) return;
+    getInventoryData({ warehouseIds: this.warehouseIdsToFetch, statusFilter: this.selectedStatus })
       .then(rows => {
         this.data = rows.map(row => {
           const cleanedRow = {};

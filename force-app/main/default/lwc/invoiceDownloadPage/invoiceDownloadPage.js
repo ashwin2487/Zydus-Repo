@@ -177,44 +177,6 @@ export default class InvoiceDownloadPage extends LightningElement {
             this.invoiceItems = [];
             let counter = 1;
 
-            // (this.invoiceDetails.Invoice_Product_Line_Items__r || []).forEach(item => {
-            //     const zydusProduct = item.Zydus_Product__r || {};
-            //     const zydusProductName = zydusProduct.Name || '';
-            //     const dia = zydusProduct.Diameter__c || '';
-            //     const length = zydusProduct.Length__c || '';
-            //     const description = zydusProduct.Material_Description__c || '';
-
-
-            //     const cgst = item.CGST__c.toFixed(2) || 0;
-            //     const sgst = item.SGST__c.toFixed(2) || 0;
-            //     const igst = item.IGST__c.toFixed(2) || 0;
-            //     const unitPrice = item.Unit_Price__c.toFixed(2) || 0;
-            //     const netAmount = item.Net_Amount__c.toFixed(2) || 0;
-            //     this.netFinalAmount = netAmount;
-            //     this.scheme = item.Scheme__c || '';
-
-            //     this.invoiceItems.push({
-            //         id: counter++,
-            //         productName: zydusProductName,
-            //         length: length,
-            //         diameter: dia,
-            //         description: description,
-            //         quantity: item.Quantity__c,
-            //         batchNumber: item.Batch_Number__c,
-            //         serialNumber: item.Serial_Number__c,
-            //         unitPrice: unitPrice,
-            //         hsn: item.HSN__c,
-            //         mfgDate: item.Manufacture_Date__c,
-            //         expiryDate: item.Expiry_Date__c,
-            //         cgst: cgst,
-            //         sgst: sgst,
-            //         igst: igst,
-            //         netAmount: netAmount,
-            //         cgstRate: ((cgst * 100) / netAmount).toFixed(2),
-            //         sgstRate: ((sgst * 100) / netAmount).toFixed(2),
-            //         igstRate: ((igst * 100) / netAmount).toFixed(2)
-            //     });
-            // });
 
             // Replace this section in your invoiceItems processing:
             (this.invoiceDetails.Invoice_Product_Line_Items__r || []).forEach(item => {
@@ -346,35 +308,90 @@ export default class InvoiceDownloadPage extends LightningElement {
         doc.setLineWidth(0.5);
         doc.setDrawColor(150, 150, 150);
 
+        // const drawTableHeaders = (startY) => {
+        //     // Updated headers without Unit Price
+        //     const mainHeaders = [
+        //         'Sr. No.', 'Product Name', 'Diameter', 'Length', 'Description', 'Batch No', 'Sr. No.',
+        //         'Mfg. Date', 'Exp. Date', 'HSN', 'Total Before Tax', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total Value'
+        //     ];
+
+        //     // Updated widths without Unit Price column
+        //     const mergedWidths = [
+        //         12, 25, 12, 12, 30, 15, 15, 12, 12, 12, 18, 18, 22, 22, 22, 15
+        //     ];
+
+        //     const printableWidth = pageWidth - margin * 2;
+        //     const headerHeight = 12;
+
+        //     // Table headers - First row
+        //     doc.setFillColor(240, 240, 240);
+        //     doc.rect(margin, startY, printableWidth, headerHeight, 'F');
+        //     doc.rect(margin, startY, printableWidth, headerHeight);
+        //     let xPosition = margin;
+        //     doc.setFont('helvetica', 'bold');
+        //     doc.setFontSize(7);
+
+        //     mainHeaders.forEach((header, index) => {
+        //         doc.text(header, xPosition + mergedWidths[index] / 2, startY + headerHeight / 2, { align: 'center' });
+        //         if (index > 0) {
+        //             doc.line(xPosition, startY, xPosition, startY + headerHeight);
+        //         }
+        //         xPosition += mergedWidths[index];
+        //     });
+
+        //     let headerY = startY + headerHeight;
+
+        //     // Table headers - Second row (Rate/Amt subheaders)
+        //     doc.setFillColor(240, 240, 240);
+        //     doc.rect(margin, headerY, printableWidth, headerHeight, 'F');
+        //     doc.rect(margin, headerY, printableWidth, headerHeight);
+        //     xPosition = margin;
+
+        //     // Skip first 12 columns (reduced from 13)
+        //     for (let i = 0; i < 12; i++) {
+        //         if (i > 0) {
+        //             doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+        //         }
+        //         xPosition += mergedWidths[i];
+        //     }
+
+        //     // Add Rate/Amt subheaders for CGST, SGST, IGST
+        //     const taxColumns = ['CGST', 'SGST', 'IGST'];
+        //     taxColumns.forEach((taxType, taxIndex) => {
+        //         const taxWidth = mergedWidths[12 + taxIndex]; // Updated index
+        //         const halfWidth = taxWidth / 2;
+
+        //         // Rate column
+        //         doc.text('Rate', xPosition + halfWidth / 2, headerY + headerHeight / 2, { align: 'center' });
+        //         doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+        //         xPosition += halfWidth;
+
+        //         // Amt column  
+        //         doc.text('Amt.', xPosition + halfWidth / 2, headerY + headerHeight / 2, { align: 'center' });
+        //         doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+        //         xPosition += halfWidth;
+        //     });
+
+        //     // Total Value column (no subheader)
+        //     doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+
+        //     return headerY + headerHeight;
+        // };
 
         const drawTableHeaders = (startY) => {
-            // const mainHeaders = [
-            //     'Sr. No.', 'Product Name', 'Diameter', 'Length', 'Description', 'Batch No', 'Sr. No.',
-            //     'Mfg. Date', 'Exp. Date', 'HSN', 'Unit Price', 'Total Before Tax', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total Value'
-            // ];
-
-            // const mergedHeaders = [
-            //     'Sr. No.', 'Product Name', 'Diameter', 'Length', 'Description', 'Batch No', 'Sr. No.',
-            //     'Mfg. Date', 'Exp. Date', 'HSN', 'Total Before Tax', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total Value'
-            // ];
-
-            // const mergedWidths = [
-            //     12, 25, 12, 12, 30, 15, 15, 12, 12, 12, 15, 18, 22, 22, 22, 15
-            // ];
-
             const mainHeaders = [
                 'Sr. No.', 'Product Name', 'Diameter', 'Length', 'Description', 'Batch No', 'Sr. No.',
-                'Mfg. Date', 'Exp. Date', 'HSN', 'Unit Price', 'Total Before Tax', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total Value'
+                'Mfg. Date', 'Exp. Date', 'HSN', 'Total Before Tax', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total Value'
             ];
 
             const mergedWidths = [
-                12, 25, 12, 12, 30, 15, 15, 12, 12, 12, 15, 18, 18, 22, 22, 22, 15
+                12, 25, 12, 12, 30, 15, 15, 12, 12, 12, 18, 18, 22, 22, 22, 15
             ];
 
             const printableWidth = pageWidth - margin * 2;
-            const headerHeight = 12;
+            const headerHeight = 8; // Reduced height for more compact look
 
-            // Table headers - First row
+            // Single header row with subdivisions
             doc.setFillColor(240, 240, 240);
             doc.rect(margin, startY, printableWidth, headerHeight, 'F');
             doc.rect(margin, startY, printableWidth, headerHeight);
@@ -382,51 +399,41 @@ export default class InvoiceDownloadPage extends LightningElement {
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7);
 
-            mainHeaders.forEach((header, index) => {
-                doc.text(header, xPosition + mergedWidths[index] / 2, startY + headerHeight / 2, { align: 'center' });
-                if (index > 0) {
-                    doc.line(xPosition, xPosition, startY, startY + headerHeight);
-                }
-                xPosition += mergedWidths[index];
-            });
-
-            let headerY = startY + headerHeight;
-
-            // Table headers - Second row (Rate/Amt subheaders)
-            doc.setFillColor(240, 240, 240);
-            doc.rect(margin, headerY, printableWidth, headerHeight, 'F');
-            doc.rect(margin, headerY, printableWidth, headerHeight);
-            xPosition = margin;
-
-            // Skip first 13 columns (increased from 12)
+            // Draw main headers for first 12 columns
             for (let i = 0; i < 12; i++) {
+                doc.text(mainHeaders[i], xPosition + mergedWidths[i] / 2, startY + headerHeight / 2, { align: 'center' });
                 if (i > 0) {
-                    doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+                    doc.line(xPosition, startY, xPosition, startY + headerHeight);
                 }
                 xPosition += mergedWidths[i];
             }
 
-            // Add Rate/Amt subheaders for CGST, SGST, IGST
+            // Tax columns with Rate/Amt subdivisions in single row
             const taxColumns = ['CGST', 'SGST', 'IGST'];
             taxColumns.forEach((taxType, taxIndex) => {
-                const taxWidth = mergedWidths[13 + taxIndex]; // Updated index
+                const taxWidth = mergedWidths[12 + taxIndex];
                 const halfWidth = taxWidth / 2;
 
-                // Rate column
-                doc.text('Rate', xPosition + halfWidth / 2, headerY + headerHeight / 2, { align: 'center' });
-                doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+                // Draw vertical line before tax section
+                doc.line(xPosition, startY, xPosition, startY + headerHeight);
+
+                // Rate subheader
+                doc.text('Rate', xPosition + halfWidth / 2, startY + headerHeight / 2, { align: 'center' });
                 xPosition += halfWidth;
 
-                // Amt column  
-                doc.text('Amt.', xPosition + halfWidth / 2, headerY + headerHeight / 2, { align: 'center' });
-                doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+                // Vertical line between Rate and Amt
+                doc.line(xPosition, startY, xPosition, startY + headerHeight);
+
+                // Amt subheader
+                doc.text('Amt.', xPosition + halfWidth / 2, startY + headerHeight / 2, { align: 'center' });
                 xPosition += halfWidth;
             });
 
-            // Total Value column (no subheader)
-            doc.line(xPosition, headerY, xPosition, headerY + headerHeight);
+            // Total Value column
+            doc.line(xPosition, startY, xPosition, startY + headerHeight);
+            doc.text(mainHeaders[15], xPosition + mergedWidths[15] / 2, startY + headerHeight / 2, { align: 'center' });
 
-            return headerY + headerHeight;
+            return startY + headerHeight;
         };
 
         // Full-Width Title with Bordered Box
@@ -647,20 +654,28 @@ export default class InvoiceDownloadPage extends LightningElement {
             doc.text(section.value, sectionX + 1, yPosition + 8);
         });
 
-        yPosition += infoRowHeight + 5;
+        yPosition += infoRowHeight ;
 
         // Table Section - Modified to conditionally show headers and table
+        // if (!Array.isArray(this.invoiceItems) || this.invoiceItems.length === 0) {
+        //     // No headers, no table - just show the no data message
+        //     doc.setFontSize(10);
+        //     doc.text('No line items available to display.', margin, yPosition + 5);
+        //     yPosition += 15;
+        // }
         if (!Array.isArray(this.invoiceItems) || this.invoiceItems.length === 0) {
             // No headers, no table - just show the no data message
             doc.setFontSize(10);
             doc.text('No line items available to display.', margin, yPosition + 5);
             yPosition += 15;
         }
-        // Replace the table data rows section:
         else {
+            // const mergedWidths = [
+            //     12, 25, 12, 12, 30, 15, 15, 12, 12, 12, 18, 18, 22, 22, 22, 15
+            // ];
             const mergedWidths = [
-                12, 25, 12, 12, 30, 15, 15, 12, 12, 12, 15, 18, 18, 22, 22, 22, 15
-            ];
+        12, 25, 12, 12, 30, 15, 15, 12, 12, 12, 18, 18, 22, 22, 22, 15
+    ];
 
             // Draw initial table headers
             yPosition = drawTableHeaders(yPosition);
@@ -672,13 +687,14 @@ export default class InvoiceDownloadPage extends LightningElement {
 
             this.invoiceItems.forEach((item, rowIndex) => {
                 // Check if we need a new page (leave space for totals and footer)
-                if (yPosition > pageHeight - 100) {
+                if (yPosition > pageHeight - 80) {
                     doc.addPage();
                     yPosition = 20;
                     // Redraw headers on new page
                     yPosition = drawTableHeaders(yPosition);
                 }
 
+                // Updated rowData without Unit Price
                 const rowData = [
                     item.id?.toString() || '',
                     item.productName || '',
@@ -690,9 +706,8 @@ export default class InvoiceDownloadPage extends LightningElement {
                     item.mfgDate || '',
                     item.expiryDate || '',
                     item.hsn || '',
-                    item.unitPrice?.toString() || '0.00',
                     item.totalBeforeTax?.toString() || '0.00',
-                    10, // Adjusted to match image
+                    10, // Taxable value
                     (item.cgstRate || 0) + '%',
                     (item.cgst || 0),
                     (item.sgstRate || 0) + '%',
@@ -714,8 +729,8 @@ export default class InvoiceDownloadPage extends LightningElement {
 
                 xPosition = margin;
 
-                // Regular columns (0-12)
-                for (let i = 0; i < 13; i++) {
+                // Regular columns (0-11, excluding Unit Price)
+                for (let i = 0; i < 12; i++) {
                     const maxWidth = mergedWidths[i] - 2;
                     const splitText = doc.splitTextToSize(rowData[i].toString(), maxWidth);
                     const displayText = splitText[0];
@@ -730,28 +745,29 @@ export default class InvoiceDownloadPage extends LightningElement {
                 // Tax columns with Rate/Amt subdivisions
                 const taxColumns = ['CGST', 'SGST', 'IGST'];
                 taxColumns.forEach((taxType, taxIndex) => {
-                    const taxWidth = mergedWidths[13 + taxIndex];
+                    const taxWidth = mergedWidths[12 + taxIndex]; // Updated index
                     const halfWidth = taxWidth / 2;
 
                     // Rate
-                    const rateIndex = 13 + (taxIndex * 2);
+                    const rateIndex = 12 + (taxIndex * 2);
                     doc.text(rowData[rateIndex], xPosition + halfWidth / 2, yPosition + rowHeight / 2, { align: 'center' });
                     doc.line(xPosition, yPosition, xPosition, yPosition + rowHeight);
                     xPosition += halfWidth;
 
                     // Amount
-                    const amtIndex = 14 + (taxIndex * 2);
+                    const amtIndex = 13 + (taxIndex * 2);
                     doc.text(rowData[amtIndex], xPosition + halfWidth / 2, yPosition + rowHeight / 2, { align: 'center' });
                     doc.line(xPosition, yPosition, xPosition, yPosition + rowHeight);
                     xPosition += halfWidth;
                 });
 
                 // Total Value
-                doc.text(rowData[19], xPosition + mergedWidths[16] / 2, yPosition + rowHeight / 2, { align: 'center' });
+                doc.text(rowData[18], xPosition + mergedWidths[15] / 2, yPosition + rowHeight / 2, { align: 'center' });
 
                 yPosition += rowHeight;
             });
 
+            // Total row
             const totalRowHeight = 12;
             doc.setFillColor(240, 240, 240);
             doc.rect(margin, yPosition, printableWidth, totalRowHeight, 'F');
@@ -760,24 +776,24 @@ export default class InvoiceDownloadPage extends LightningElement {
             xPosition = margin;
             doc.setFont('helvetica', 'bold');
 
-            // "TOTAL" label spanning first 12 columns
+            // "TOTAL" label spanning first 11 columns (reduced from 12)
             let totalLabelWidth = 0;
-            for (let i = 0; i < 12; i++) {
+            for (let i = 0; i < 11; i++) {
                 totalLabelWidth += mergedWidths[i];
             }
             doc.text('TOTAL', xPosition + totalLabelWidth / 2, yPosition + totalRowHeight / 2, { align: 'center' });
             doc.line(xPosition + totalLabelWidth, yPosition, xPosition + totalLabelWidth, yPosition + totalRowHeight);
             xPosition += totalLabelWidth;
 
-            // Total taxable value (column 12)
-            doc.text((this.totalAmount || 0).toFixed(2), xPosition + mergedWidths[12] / 2, yPosition + totalRowHeight / 2, { align: 'center' });
-            xPosition += mergedWidths[12];
+            // Total taxable value (column 11, was 12)
+            doc.text((this.totalAmount || 0).toFixed(2), xPosition + mergedWidths[11] / 2, yPosition + totalRowHeight / 2, { align: 'center' });
+            xPosition += mergedWidths[11];
 
-            // Tax totals (starting from column 13)
+            // Tax totals (starting from column 12, was 13)
             const taxTotals = [this.totalCGSTAmount, this.totalSGSTAmount, this.totalIGSTAmount];
             const taxColumns = ['CGST', 'SGST', 'IGST'];
             taxColumns.forEach((taxType, taxIndex) => {
-                const taxWidth = mergedWidths[13 + taxIndex];
+                const taxWidth = mergedWidths[12 + taxIndex]; // Updated index
                 doc.text((taxTotals[taxIndex] || 0).toFixed(2), xPosition + taxWidth / 2, yPosition + totalRowHeight / 2, { align: 'center' });
                 doc.line(xPosition, yPosition, xPosition, yPosition + totalRowHeight);
                 xPosition += taxWidth;
@@ -785,7 +801,7 @@ export default class InvoiceDownloadPage extends LightningElement {
 
             // Final total (last column)
             const finalTotal = (this.totalAmount || 0) + (this.totalCGSTAmount || 0) + (this.totalSGSTAmount || 0) + (this.totalIGSTAmount || 0);
-            doc.text(finalTotal.toFixed(2), xPosition + mergedWidths[16] / 2, yPosition + totalRowHeight / 2, { align: 'center' });
+            doc.text(finalTotal.toFixed(2), xPosition + mergedWidths[15] / 2, yPosition + totalRowHeight / 2, { align: 'center' });
 
             yPosition += totalRowHeight + 5;
         }

@@ -694,25 +694,35 @@ export default class OnboardingProcess extends LightningElement {
                 }
                 break;
 
-            case 'panNumber':
+            case 'panNumber':             
                 if (this.panNumber?.length > 10)
                     return 'PAN Number cannot be more than 10 characters.';
-                if (mode === 'submit' && this.panNumber?.length !== 10)
-                    return 'PAN Number must be 10 characters long.';
+                if (mode === 'submit') {
+                    if (this.panNumber?.length !== 10)
+                        return 'PAN Number must be 10 characters long (e.g. ABCDE1234F).';
+                    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+                    if (!panRegex.test(this.panNumber))
+                        return 'Invalid PAN format (e.g. ABCDE1234F).';
+                }
                 break;
             case 'gstNumber':
                 if (this.gstNumber?.length > 15)
                     return 'GST Number cannot be more than 15 characters.';
-                if (mode === 'submit' && this.gstNumber?.length !== 15)
-                    return 'GST Number must be 15 characters long.';
+                if (mode === 'submit') {
+                    if (this.gstNumber?.length !== 15)
+                        return 'GST Number must be 15 characters long (e.g. 27ABCDE1234F1Z5).';
+                    const gstRegex = /^\d{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+                    if (!gstRegex.test(this.gstNumber))
+                        return 'Invalid GST format (e.g. 27ABCDE1234F1Z5).';
+                }
                 break;
-            case 'mobile':
+            case 'mobile':      
                 if (this.mobile?.length > 10)
                     return 'Mobile Number cannot exceed 10 digits.';
                 if (mode === 'submit' && !/^\d{10}$/.test(this.mobile))
                     return 'Mobile Number must be a valid 10-digit number.';
                 break;
-            case 'pin':
+            case 'pin': 
                 if (this.pin?.length > 6)
                     return 'PIN Code cannot exceed 6 digits.';
                 if (mode === 'submit' && !/^\d{6}$/.test(this.pin))
@@ -1050,21 +1060,21 @@ export default class OnboardingProcess extends LightningElement {
                     this.subDistributorOptionsHOB = [];
                 } else {
                     if (result.superDistributor) {
-                        this.mappingSelectedSuperDistributorId=result.superDistributor.Id;
+                        this.mappingSelectedSuperDistributorId = result.superDistributor.Id;
                         this.selectedSuperDistributorHOB = {
                             label: result.superDistributor.Name,
                             value: result.superDistributor.Id
                         };
                     }
                     if (result.distributor) {
-                        this.mappingSelectedDistributorId=result.distributor.Id;
+                        this.mappingSelectedDistributorId = result.distributor.Id;
                         this.selectedDistributorHOB = {
                             label: result.distributor.Name,
                             value: result.distributor.Id
                         };
                     }
                     if (result.subDistributor) {
-                        this.mappingSelectedSubDistributorId=result.subDistributor.Id;
+                        this.mappingSelectedSubDistributorId = result.subDistributor.Id;
                         this.selectedSubDistributorHOB = {
                             label: result.subDistributor.Name,
                             value: result.subDistributor.Id
@@ -1212,7 +1222,7 @@ export default class OnboardingProcess extends LightningElement {
         const valueToRemove = event.target.dataset.value;
         this.commentOptionSelected = this.commentOptionSelected.filter(option => option.value !== valueToRemove);
     }
-    handlephyziiIdChange(event){
+    handlephyziiIdChange(event) {
         this.phyziiId = event.target.value;
     }
     handleSubmitHospitalForApproval() {
