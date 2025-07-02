@@ -7,8 +7,6 @@ public without sharing class WarehouseInventoryController {
     ) {
         Date today = Date.today();
         Date aboutToExpireCutoff = today.addDays(30);
-        
-        // ——— Query with aliases ———
         List<Warehouse_Product_Line_Items__c> items = [
             SELECT
             Id,
@@ -18,7 +16,7 @@ public without sharing class WarehouseInventoryController {
             Warehouse__r.Zydus_Product__r.Brand__r.Name,            
             Warehouse__r.Zydus_Product__r.Size__c,                 
             Warehouse__r.Zydus_Product__r.Quantity_Unit_Of_Measure__c, 
-            Supply_Order_Line_Item__r.Zydus_Price_Book_Entry__r.List_Price__c, //MRP
+            Supply_Order_Line_Item__r.Zydus_Price_Book_Entry__r.List_Price__c,
             Batch_Number__c,                        
             Serial_Number__c,                         
             Manufactured_Date__c,                   
@@ -28,7 +26,6 @@ public without sharing class WarehouseInventoryController {
             Status__c,                                  
             Condition__c,                            
             Sold_Date__c,                               
-            // Distributor & Hospital via Connected_Warehouse
             Connected_Warehouse__r.Account__r.Name,
             Connected_Warehouse__r.Hospital__r.Name
             FROM Warehouse_Product_Line_Items__c
@@ -41,11 +38,9 @@ public without sharing class WarehouseInventoryController {
         
         List<Map<String, Object>> rows = new List<Map<String, Object>>();
         
-        // Group items by unique combination of warehouse, product, batch, serial number
         Map<String, AggregateInfo> aggregateMap = new Map<String, AggregateInfo>();
         
         for (Warehouse_Product_Line_Items__c item : items) {
-            // Create unique key for grouping
             String groupKey = String.valueOf(item.Connected_Warehouse__c) + '_' + 
                 String.valueOf(item.Warehouse__r.Zydus_Product__c) + '_' +
                 String.valueOf(item.Batch_Number__c) + '_' +
@@ -56,7 +51,6 @@ public without sharing class WarehouseInventoryController {
             if (aggregateMap.containsKey(groupKey)) {
                 aggInfo = aggregateMap.get(groupKey);
             } else {
-                // Create new aggregate info
                 aggInfo = new AggregateInfo(
                     item.Connected_Warehouse__r.Name,
                     item.Warehouse__r.Zydus_Product__r.Name,
@@ -80,12 +74,10 @@ public without sharing class WarehouseInventoryController {
             aggInfo.totalQty += quantity;
             aggInfo.totalValue += (unitPrice * quantity);
             
-            // Handle expiry logic
             if (item.Expiry_Date__c != null) {
                 aggInfo.expiryDate = item.Expiry_Date__c;
                 aggInfo.balanceExpDays = today.daysBetween(item.Expiry_Date__c);
                 
-                // Categorize expiry status
                 if (item.Is_Expired__c || item.Expiry_Date__c < today) {
                     aggInfo.expiryCategory = 'Expired';
                     aggInfo.expiredQty += quantity;
@@ -105,7 +97,6 @@ public without sharing class WarehouseInventoryController {
                 aggInfo.expiryCategory = 'No Expiry';
             }
             
-            // Handle condition-based categorization
             if (item.Condition__c == 'Damaged' || item.Status__c == 'In Transit') {
                 aggInfo.inTransitDamaged++;
             }
@@ -114,18 +105,13 @@ public without sharing class WarehouseInventoryController {
                 aggInfo.restricted++;
             }
             
-            // Track last usage date
             if (item.Sold_Date__c != null) {
                 if (aggInfo.lastUsageDate == null || item.Sold_Date__c > aggInfo.lastUsageDate) {
                     aggInfo.lastUsageDate = item.Sold_Date__c;
                 }
             }
-            
-            // Determine stock stage based on expiry and condition
             aggInfo.stockStage = determineStockStage(item, today, aboutToExpireCutoff);
         }
-        
-        // Convert aggregated data to row maps
         for (AggregateInfo aggInfo : aggregateMap.values()) {
             rows.add(aggInfo.toRowMap());
         }
@@ -133,8 +119,6 @@ public without sharing class WarehouseInventoryController {
         System.debug('ROWS; '+rows);
         return rows;
     }
-    
-    // Helper method to determine stock stage
     private static String determineStockStage(Warehouse_Product_Line_Items__c item, Date today, Date aboutToExpireCutoff) {
         if (item.Is_Expired__c || (item.Expiry_Date__c != null && item.Expiry_Date__c < today)) {
             return 'Expired';
@@ -152,7 +136,6 @@ public without sharing class WarehouseInventoryController {
     }
     
     private class AggregateInfo {
-        // Static (sample) fields
         final String warehouseName;
         final String productName;
         final String materialCode;
@@ -181,8 +164,6 @@ public without sharing class WarehouseInventoryController {
         String  expiryCategory  = null;
         
         String  stockStage      = null;
-        
-        // Constructor
         public AggregateInfo(String warehouseName, String productName, String materialCode, 
                              String brand, String size, String uom, Decimal mrp, 
                              String batchNumber, String serialNumber, Date manufacturedDate,
@@ -365,13 +346,10 @@ public without sharing class WarehouseInventoryController {
         List<Supply_Order__c> newSOs = new List<Supply_Order__c>();
         
         Map<Id, Supply_Order__c> originalToReverseSO = new Map<Id, Supply_Order__c>();
-        
-        // Create Reverse Supply Orders (RSO)
         for (Id originalSoId : soToWplis.keySet()) {
             Warehouse_Product_Line_Items__c sample = soToWplis.get(originalSoId)[0];
             
             Supply_Order__c rso = new Supply_Order__c(
-                //Name = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.Name.replace('SO','RSO'),
                 RecordTypeId = rsoRT,
                 Consignee_Distributor__c = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.Consignor_Distributor__c,
                 Consignor_Distributor__c = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.Consignee_Distributor__c,
@@ -410,8 +388,6 @@ public without sharing class WarehouseInventoryController {
                     soProducts.add(sop);
                     soProductKeyMap.put(key, sop);
                 }
-                
-                // Generate suffix
                 Integer suffixIndex = productToSuffix.containsKey(productId) ? productToSuffix.get(productId) : 1;
                 String baseSuffix = '';
                 Integer temp = suffixIndex;
@@ -421,8 +397,6 @@ public without sharing class WarehouseInventoryController {
                     temp = (temp - 1) / 26;
                 }
                 productToSuffix.put(productId, suffixIndex + 1);
-                
-                // Generate custom name
                 String name = 'SOP' + String.valueOf(suffixIndex) + '/' + orderNumber + '/' + baseSuffix;
                 
                 Supply_Order_Line_Item__c soli = new Supply_Order_Line_Item__c(

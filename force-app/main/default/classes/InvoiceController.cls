@@ -41,6 +41,8 @@ public with sharing class InvoiceController {
                                SGST__c,
                                IGST__c, 
                                CGST__c,
+                        	   	Bill_Discount_Amount__c,
+                        Before_Tax_Amount__c,
                                Net_Amount__c,
                                Unit_Price__c,
                                Serial_Number__c,

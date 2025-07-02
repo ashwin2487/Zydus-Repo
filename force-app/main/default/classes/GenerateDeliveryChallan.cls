@@ -47,7 +47,7 @@ public without sharing class GenerateDeliveryChallan {
             }else if(supplyOrder.Consignee_Distributor__c == null && supplyOrder.Consignee_Hospital__c != null && supplyOrder.New_Purchase_Order__r.RecordType.Name == 'Hospital Purchase Order'){
                 if(supplyOrder.Consignee_Hospital__r.Comment_Options__c != null && supplyOrder.Consignee_Hospital__r.Comment_Options__c.contains('DCL')){
                     if(supplyOrder.Consignee_Hospital__r.Invoice_Comment__c != null){
-                       dc.Comment__c = supplyOrder.Consignee_Hospital__r.Invoice_Comment__c;
+                        dc.Comment__c = supplyOrder.Consignee_Hospital__r.Invoice_Comment__c;
                     }
                 }
                 dc.Name = supplyOrder.Name.replace('SO', 'DC');
@@ -195,7 +195,7 @@ public without sharing class GenerateDeliveryChallan {
             }
             update toUpdateStageNameList;
             update toUpdateStatusList;
-      
+            
             Delivery_Challan__c curDC = [
                 SELECT Id, Name, Supply_Order__c,
                 Supply_Order__r.Name,
@@ -329,24 +329,35 @@ public without sharing class GenerateDeliveryChallan {
         if(!wpliToUpdate.isEmpty()){
             update wpliToUpdate;
         }
-        map<Id , Id> zydusPriceBookEntryMap = new Map<Id,Id>();
+        Map<Id, Id> zydusPriceBookEntryMap = new Map<Id, Id>();
         String buyerState = [SELECT State__c FROM Hospital__c WHERE Id = :req.consigneeHospital].State__c;
         String supplierState = [SELECT State__c FROM Account WHERE Id = :req.consignorDistributorId].State__c;
         String supplyType = buyerState == supplierState ? 'Intra-State' : 'Inter-State';
-     	Id hospitalPriceBookId = [SELECT Id, Zydus_Price_Book__c FROM Hospital__c WHERE Id = :req.consigneeHospital].Zydus_Price_Book__c;
-        for(Zydus_Price_Book_Entry__c hospEntry : [select Id, Zydus_Product__c from Zydus_Price_Book_Entry__c where Zydus_Price_Book__c =: hospitalPriceBookId]){
-            zydusPriceBookEntryMap.Put(hospEntry.Zydus_Product__c,hospEntry.Id);
+        
+        Id hospitalPriceBookId = [SELECT Id, Zydus_Price_Book__c FROM Hospital__c WHERE Id = :req.consigneeHospital].Zydus_Price_Book__c;
+        
+        for (Zydus_Price_Book_Entry__c hospEntry : [
+            SELECT Id, Zydus_Product__c, Unit_Price__c
+            FROM Zydus_Price_Book_Entry__c
+            WHERE Zydus_Price_Book__c = :hospitalPriceBookId
+        ]) {
+            zydusPriceBookEntryMap.put(hospEntry.Zydus_Product__c, hospEntry.Id);
         }
+        
+        // Preload the price book entries to avoid SOQL in loop
+        Map<Id, Zydus_Price_Book_Entry__c> priceBookEntryMap = new Map<Id, Zydus_Price_Book_Entry__c>(
+            [SELECT Id, Unit_Price__c FROM Zydus_Price_Book_Entry__c WHERE Id IN :zydusPriceBookEntryMap.values()]
+        );
         
         Set<Id> productIds = new Set<Id>();
         for (ProductWrapper pw : req.products) {
             productIds.add(pw.productId);
         }
         
-        Map<Id, Zydus_Product__c> productMap = new Map<Id, Zydus_Product__c>([
-            SELECT Id, HSN_Code__c FROM Zydus_Product__c WHERE Id IN :productIds
-        ]);
-		
+        Map<Id, Zydus_Product__c> productMap = new Map<Id, Zydus_Product__c>(
+            [SELECT Id, HSN_Code__c FROM Zydus_Product__c WHERE Id IN :productIds]
+        );
+        
         Set<Id> hsnIds = new Set<Id>();
         for (Zydus_Product__c p : productMap.values()) {
             if (p.HSN_Code__c != null) hsnIds.add(p.HSN_Code__c);
@@ -354,6 +365,7 @@ public without sharing class GenerateDeliveryChallan {
         
         Date today = Date.today();
         Map<String, HSN_Tax_Master_Link__c> taxMap = new Map<String, HSN_Tax_Master_Link__c>();
+        
         if (!hsnIds.isEmpty()) {
             for (HSN_Tax_Master_Link__c tax : [
                 SELECT HSN_Code__c, Supply_Type__c, CGST__c, SGST__c, IGST__c, Tax_Master__r.State__c
@@ -368,7 +380,6 @@ public without sharing class GenerateDeliveryChallan {
                 taxMap.put(key, tax);
             }
         }
-
         
         List<Delivery_Challan_Line_Item__c> lineItems = new List<Delivery_Challan_Line_Item__c>();
         String ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -376,13 +387,16 @@ public without sharing class GenerateDeliveryChallan {
         Map<Id, Integer> productToP = new Map<Id, Integer>();
         Integer pCounter = 1;    
         String orderNumber = dc.Name.replace('DC-', '');
+        
         for (ProductWrapper pw : req.products) {
             if (!productToSuffix.containsKey(pw.productId)) {
                 productToP.put(pw.productId, pCounter++);
                 productToSuffix.put(pw.productId, 1);
             }
+            
             for (LineItemWrapper li : pw.lineItems) {
                 Warehouse_Product_Line_Items__c wpLineItem = lineItemMap.get(li.Id);
+                
                 Integer suffixIndex = productToSuffix.get(pw.productId);
                 String baseSuffix = '';
                 Integer temp = suffixIndex;
@@ -392,8 +406,7 @@ public without sharing class GenerateDeliveryChallan {
                     temp = (temp - 1) / 26;
                 }
                 productToSuffix.put(pw.productId, suffixIndex + 1); 
-                String name = 'DCP' +  productToP.get(pw.productId) + '/' + orderNumber + '/' + baseSuffix;
-                
+                String name = 'DCP' + productToP.get(pw.productId) + '/' + orderNumber + '/' + baseSuffix;
                 
                 Zydus_Product__c prod = productMap.get(pw.productId);
                 Id hsnCode = prod != null ? prod.HSN_Code__c : null;
@@ -401,9 +414,14 @@ public without sharing class GenerateDeliveryChallan {
                 String taxKey = hsnCode + '_' + supplierState + '_' + supplyType;
                 HSN_Tax_Master_Link__c tax = taxMap.get(taxKey);
                 
-                Decimal unitPrice = wpLineItem.Unit_Price__c != null ? wpLineItem.Unit_Price__c : 0;
-                Decimal cgst = 0, sgst = 0, igst = 0;
+                // ✅ Get unit price from price book
+                Decimal unitPrice = 0;
+                Zydus_Price_Book_Entry__c entry = priceBookEntryMap.get(zydusPriceBookEntryMap.get(pw.productId));
+                if (entry != null) {
+                    unitPrice = entry.Unit_Price__c != null ? entry.Unit_Price__c : 0;
+                }
                 
+                Decimal cgst = 0, sgst = 0, igst = 0;
                 if (tax != null) {
                     if (supplyType == 'Intra-State') {
                         cgst = unitPrice * (tax.CGST__c / 100);
@@ -418,11 +436,11 @@ public without sharing class GenerateDeliveryChallan {
                 lineItems.add(new Delivery_Challan_Line_Item__c(
                     Delivery_Challan__c = dc.Id,
                     DC_Product__c       = prodToDcProdId.get(pw.productId),
-                    Unit_Price__c       = wpLineItem.Unit_Price__c,
+                    Unit_Price__c       = unitPrice,
                     List_Price__c       = wpLineItem.List_Price__c,
                     Zydus_Product__c    = pw.productId,
                     Serial_Number__c    = wpLineItem.Serial_Number__c,
-                    Batch_Number__c		= wpLineItem.Batch_Number__c,
+                    Batch_Number__c     = wpLineItem.Batch_Number__c,
                     Expiry_Date__c      = wpLineItem.Expiry_Date__c,
                     Manufacturing_Date__c = wpLineItem.Manufactured_Date__c,
                     Warehouse__c        = wpLineItem.Warehouse__r.Warehouse__c,
@@ -432,11 +450,13 @@ public without sharing class GenerateDeliveryChallan {
                     HSN_Code__c         = wpLineItem.Warehouse__r.Zydus_Product__r.HSN_Code__c,
                     SGST__c             = sgst,
                     Net_Amount__c       = netAmount,
-                    Zydus_Price_Book_Entry__c = zydusPriceBookEntryMap.get(pw.productId)
+                    Zydus_Price_Book_Entry__c = entry != null ? entry.Id : null
                 ));
             }
         }
+        
         insert lineItems;
+        
         
         Delivery_Challan__c curDC = [
             SELECT Id,
@@ -637,7 +657,7 @@ public without sharing class GenerateDeliveryChallan {
     
     @AuraEnabled
     public static List<Warehouse_Product_Line_Items__c> getWarehouseLineItems(String productId, String warehouseId) {
-
+        
         List<Warehouse_Product__c> wps = [
             SELECT Id 
             FROM Warehouse_Product__c 

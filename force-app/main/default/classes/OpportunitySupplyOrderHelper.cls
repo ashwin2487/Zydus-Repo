@@ -87,6 +87,7 @@ public with sharing class OpportunitySupplyOrderHelper {
         @AuraEnabled public Id pricebookEntry;
         public SupplyOrderLineInputDTO() {}
     }
+    
     @AuraEnabled(cacheable=true)
     public static List<SupplyOrderLineDTO> getOpportunityWithWarehouseData(Id purchaseOrderId) {
         Date today = Date.today();
@@ -95,22 +96,32 @@ public with sharing class OpportunitySupplyOrderHelper {
             accountRecordTypeMap.put(rt.Name, rt.Id);
         }
         
-        Purchase_Order__c opp = [
-            SELECT Id, Supplier_Distributor__c, Account__c, RecordTypeId
+        Purchase_Order__c po = [
+            SELECT Id, Supplier_Distributor__c, Account__c, RecordTypeId,
+            Supplier_Distributor__r.State__c, Account__r.State__c
             FROM Purchase_Order__c
             WHERE Id = :purchaseOrderId
             LIMIT 1
         ];
-        if (opp == null) {
+        if (po == null) {
             throw new AuraHandledException('Purchase Order not found.');
         }
         
-        Id supplierId = opp.Supplier_Distributor__c;
+        Id supplierId = po.Supplier_Distributor__c;
+        Id consigneeId = po.Account__c;
+        
         Id supplierRecordTypeId = null;
         if (supplierId != null) {
             Account supplierAccount = [SELECT Id, RecordTypeId FROM Account WHERE Id = :supplierId LIMIT 1];
             supplierRecordTypeId = supplierAccount.RecordTypeId;
         }
+        
+        String supplierState = po.Supplier_Distributor__r.State__c;
+        String consigneeState = po.Account__r.State__c;
+        String supplyType = (supplierState != null && consigneeState != null && supplierState == consigneeState) ? 'Intra-State' : 'Inter-State';
+        
+        Set<Id> hsnIdsForTaxLookup = new Set<Id>();
+        Map<Id, Id> productToHsnId = new Map<Id, Id>();
         
         List<Purchase_Order_Product__c> oliList = [
             SELECT Id,
@@ -120,11 +131,12 @@ public with sharing class OpportunitySupplyOrderHelper {
             Zydus_Price_Book__c,
             Zydus_Price_Book_Entry__c,
             Pending_Quantity__c,
-            CGST__c,
-            SGST__c,
-            IGST__c,
+            CGST__c, 
+            SGST__c, 
+            IGST__c, 
             HSN_Code__c,
-            HSN_Code__r.Name
+            HSN_Code__r.Name,
+            Zydus_Product__r.HSN_Code__c 
             FROM Purchase_Order_Product__c
             WHERE Purchase_Order__c = :purchaseOrderId
             AND SO_Status__c != 'SO Dispatched'
@@ -137,6 +149,10 @@ public with sharing class OpportunitySupplyOrderHelper {
             if (pop.Zydus_Product__c != null && pop.Zydus_Price_Book__c != null) {
                 productIds.add(pop.Zydus_Product__c);
                 pricebookIds.add(pop.Zydus_Price_Book__c);
+            }
+            if (pop.Zydus_Product__r.HSN_Code__c != null) {
+                hsnIdsForTaxLookup.add(pop.Zydus_Product__r.HSN_Code__c);
+                productToHsnId.put(pop.Zydus_Product__c, pop.Zydus_Product__r.HSN_Code__c);
             }
         }
         
@@ -152,6 +168,21 @@ public with sharing class OpportunitySupplyOrderHelper {
             ]) {
                 String key = pbe.Zydus_Product__c + '-' + pbe.Zydus_Price_Book__c;
                 pricebookEntryMap.put(key, pbe);
+            }
+        }
+        
+        Map<Id, HSN_Tax_Master_Link__c> hsnTaxMap = new Map<Id, HSN_Tax_Master_Link__c>();
+        if (!hsnIdsForTaxLookup.isEmpty()) {
+            for (HSN_Tax_Master_Link__c tax : [
+                SELECT Id, HSN_Code__c, Supply_Type__c, CGST__c, SGST__c, IGST__c, Tax_Master__r.State__c
+                FROM HSN_Tax_Master_Link__c
+                WHERE HSN_Code__c IN :hsnIdsForTaxLookup
+                AND Supply_Type__c = :supplyType
+                AND Tax_Master__r.Is_Active__c = TRUE
+                AND Tax_Master__r.Effective_From__c <= :today
+                AND (Tax_Master__r.Effective_To__c = NULL OR Tax_Master__r.Effective_To__c >= :today)
+            ]) {
+                hsnTaxMap.put(tax.HSN_Code__c, tax);
             }
         }
         
@@ -268,15 +299,24 @@ public with sharing class OpportunitySupplyOrderHelper {
             
             Decimal unitPrice = pop.UnitPrice__c != null ? pop.UnitPrice__c : 0;
             Decimal qty = pop.Quantity__c != null ? pop.Quantity__c : 0;
-            Decimal taxableAmount = unitPrice * qty;
+            Decimal cgstPct = 0;
+            Decimal sgstPct = 0;
+            Decimal igstPct = 0;
             
-            Decimal cgstAmt = pop.CGST__c != null ? pop.CGST__c : 0;
-            Decimal sgstAmt = pop.SGST__c != null ? pop.SGST__c : 0;
-            Decimal igstAmt = pop.IGST__c != null ? pop.IGST__c : 0;
+            Id hsnCodeFromProduct = productToHsnId.get(prodId);
+            HSN_Tax_Master_Link__c relevantTax = null;
+            if (hsnCodeFromProduct != null) {
+                relevantTax = hsnTaxMap.get(hsnCodeFromProduct);
+            }
             
-            Decimal cgstPct = taxableAmount > 0 ? (cgstAmt / taxableAmount) * 100 : 0;
-            Decimal sgstPct = taxableAmount > 0 ? (sgstAmt / taxableAmount) * 100 : 0;
-            Decimal igstPct = taxableAmount > 0 ? (igstAmt / taxableAmount) * 100 : 0;
+            if (relevantTax != null) {
+                if (supplyType == 'Intra-State') {
+                    cgstPct = relevantTax.CGST__c != null ? relevantTax.CGST__c : 0;
+                    sgstPct = relevantTax.SGST__c != null ? relevantTax.SGST__c : 0;
+                } else {
+                    igstPct = relevantTax.IGST__c != null ? relevantTax.IGST__c : 0;
+                }
+            }
             
             String hsnId = pop.HSN_Code__c != null ? pop.HSN_Code__c : '';
             String hsn = pop.HSN_Code__r != null ? pop.HSN_Code__r.Name : '';
@@ -300,13 +340,13 @@ public with sharing class OpportunitySupplyOrderHelper {
             dtoList.add(new SupplyOrderLineDTO(
                 pop.Id,
                 prodId,
-                prodName,         
-                pop.Quantity__c,       
+                prodName,          
+                pop.Quantity__c,        
                 availableQty,
                 pop.UnitPrice__c,
-                cgstPct,
-                sgstPct,
-                igstPct,
+                cgstPct, 
+                sgstPct, 
+                igstPct, 
                 hsn,
                 whOptions,
                 pop.Pending_Quantity__c,
@@ -318,6 +358,7 @@ public with sharing class OpportunitySupplyOrderHelper {
         
         return dtoList;
     }
+    
     
     @AuraEnabled
     public static void createSupplyOrderFromOpportunity(Id purchaseOrderId, String linesJson) {
@@ -369,7 +410,7 @@ public with sharing class OpportunitySupplyOrderHelper {
             recordTypeMap.put(rt.Name, rt.Id);
         }
         
-        Boolean isARS = po.RecordType != null && (po.RecordType.Name == 'Purchase Order' || po.RecordType.Name == 'Manual Purchase Order');
+        Boolean isARS = po.RecordType != null && (po.RecordType.Name == 'Purchase Order');
         Boolean isHospitalOrder = po.RecordType != null && po.RecordType.Name == 'Hospital Purchase Order';
         
         if (isHospitalOrder && po.Hospital__c == null) {

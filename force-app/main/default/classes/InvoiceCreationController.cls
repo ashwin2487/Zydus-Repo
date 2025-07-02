@@ -778,8 +778,8 @@ public with sharing class InvoiceCreationController {
             FROM Delivery_Challan__c
             WHERE Id = :dcId
         ];
-       	
-       	Map<String, Id> serialToInvp=new Map<String, Id>();
+        
+        Map<String, Id> serialToInvp=new Map<String, Id>();
         for(Invoice_Product_Line_Item__c invp: [SELECT Id, Serial_Number__c FROM Invoice_Product_Line_Item__c WHERE Invoice__C=:invoiceId]){
             serialToInvp.put(invp.Serial_Number__c, invp.Id);
         }
@@ -806,6 +806,30 @@ public with sharing class InvoiceCreationController {
             FROM Warehouse__c
             WHERE Account__r.Business_Owner__c = :UserInfo.getUserId()
         ];
+        
+        List<Warehouse__c> cosigneeWH = [
+            SELECT Id
+            FROM Warehouse__c
+            WHERE Account__c= : dc.Consignee_Distributor__c
+        ];
+        Set<Id> consigneewhIds = new Set<Id>();
+        for (Warehouse__c w : cosigneeWH) consigneewhIds.add(w.Id);
+        
+         Map<String, Decimal> consigneeWpMap = new Map<String, Decimal>();
+        for (Warehouse_Product_Line_Items__c wp : [
+            SELECT Id,
+            Serial_Number__c,
+            Unit_Price__c
+            FROM Warehouse_Product_Line_Items__c
+            WHERE Connected_Warehouse__c IN :consigneewhIds
+            AND Serial_Number__c IN :serialNumbers
+            AND Status__c = 'Consumed'
+            AND Condition__c = 'Good'
+        ]) {
+            consigneeWpMap.put(wp.Serial_Number__c, wp.Unit_Price__c);
+        }
+        
+        
         Set<Id> whIds = new Set<Id>();
         for (Warehouse__c w : whs) whIds.add(w.Id);
         if (whIds.isEmpty()) return new List<ChannelPartnerLineItemDTO>();
@@ -839,6 +863,7 @@ public with sharing class InvoiceCreationController {
             Id hsn = wp.Warehouse__r.Zydus_Product__r.HSN_Code__c;
             if (hsn != null) hsnCodes.add(hsn);
         }
+        
         Date today = Date.today();
         Map<String, HSN_Tax_Master_Link__c> taxRateMap = new Map<String, HSN_Tax_Master_Link__c>();
         if (!hsnCodes.isEmpty()) {
@@ -871,7 +896,7 @@ public with sharing class InvoiceCreationController {
                 dto.suppliedDate = wp.Supplied_Date__c;
                 dto.status       = wp.Status__c;
                 dto.condition    = wp.Condition__c;
-                Decimal unitPrice = wp.Unit_Price__c != null ? wp.Unit_Price__c : 0;
+                Decimal unitPrice = consigneeWpMap.get(li.Serial_Number__c)!=null ? consigneeWpMap.get(li.Serial_Number__c) : 0;
                 dto.unitPrice = unitPrice;
                 
                 Decimal cgst = 0, sgst = 0, igst = 0;
@@ -963,7 +988,7 @@ public with sharing class InvoiceCreationController {
             
             Delivery_Challan__c dc = [SELECT Id, Consignee_Distributor__c, Consignor_Distributor__c FROM Delivery_Challan__c WHERE Id=:deliveryChallanId];
             
-            
+     
             List<Object> creditNoteObjs = (List<Object>) data.get('creditNoteId');
             List<Id> creditNoteIds = new List<Id>();
             if (creditNoteObjs != null) {
@@ -1105,12 +1130,41 @@ public with sharing class InvoiceCreationController {
                 update toUpdateWPL;
                 
             }
-            system.debug('consumed serial numbers are '+consumedSerialNumberSet);
-            system.debug('delivery_challan__c is '+deliveryChallanId);
+            
+            List<Warehouse__c> cosigneeWH = [
+                SELECT Id
+                FROM Warehouse__c
+                WHERE Account__c= : currentAccount.Id
+            ];
+            
             List<delivery_challan_line_item__c> toUpdateInvoicedTOHsopitalList = new List<delivery_challan_line_item__c>();
-            for(delivery_challan_line_item__c cur : [select Id , Is_Invoiced_To_Hospital__c from delivery_challan_line_item__c where delivery_challan__c =: deliveryChallanId AND Serial_Number__c IN : consumedSerialNumberSet]){
+            
+            Set<Id> consigneewhIds = new Set<Id>();
+            for (Warehouse__c w : cosigneeWH) consigneewhIds.add(w.Id);
+            Set<Id> consigneeDCLIs=new Set<Id>();
+            Map<String, Decimal> consigneeWpMap = new Map<String, Decimal>();
+            for (Warehouse_Product_Line_Items__c wp : [
+                SELECT Delivery_Challan_Line_Item__c
+                FROM Warehouse_Product_Line_Items__c
+                WHERE Connected_Warehouse__c IN :consigneewhIds
+                AND Serial_Number__c IN :consumedSerialNumberSet
+            ]) {
+                consigneeDCLIs.add(wp.Delivery_Challan_Line_Item__c);
+            }
+            System.debug('consumedSerialNumberSet: '+consumedSerialNumberSet);
+            System.debug('consigneeDCLIs: '+consigneeDCLIs);
+            
+            for(delivery_challan_line_item__c cur : [select Id , Is_Invoiced_To_Hospital__c, Is_Invoiced_By_parent_Account__c from delivery_challan_line_item__c 
+                                                     where Id IN: consigneeDCLIs]){
+                cur.Is_Invoiced_To_Hospital__c = true;
+                toUpdateInvoicedTOHsopitalList.add(cur);
+            }
+            
+            for(delivery_challan_line_item__c cur : [select Id , Is_Invoiced_To_Hospital__c, Is_Invoiced_By_parent_Account__c from delivery_challan_line_item__c
+                                                     where delivery_challan__c =: deliveryChallanId AND Serial_Number__c IN : consumedSerialNumberSet]){
                 system.debug('cur dcil is '+cur);
                 cur.Is_Invoiced_To_Hospital__c = true;
+                cur.Is_Invoiced_By_parent_Account__c = true;
                 toUpdateInvoicedTOHsopitalList.add(cur);
             }
             if(!toUpdateInvoicedTOHsopitalList.isEmpty()){
@@ -1195,22 +1249,17 @@ public with sharing class InvoiceCreationController {
             Id invoiceId = payload.invoiceId;
             String comment = payload.comment;
             
-            Invoice__c inv = [
-                SELECT Id, Total_Collected_Amount__c, Total_Amount__c, Payment_Status__c 
-                FROM Invoice__c 
-                WHERE Id = :invoiceId 
-                LIMIT 1
-            ];
+            Invoice__c inv = [SELECT Id, Total_Collected_Amount__c, Total_Amount__c, Payment_Status__c FROM Invoice__c WHERE Id = :invoiceId LIMIT 1];
             
             Decimal totalCollectedAmount = (inv.Total_Collected_Amount__c != null ? inv.Total_Collected_Amount__c : 0) + collectedAmount;
             inv.Total_Collected_Amount__c = totalCollectedAmount;
             
-            if (totalCollectedAmount >= inv.Total_Amount__c) {
+            if (totalCollectedAmount == inv.Total_Amount__c) {
                 inv.Payment_Status__c = 'Fully Paid';
+                inv.Invoice_Closed__c=true;
             } else if( totalCollectedAmount > 0){
-                inv.Payment_Status__c = 'Partially Paid';
+                inv.Payment_Status__c = 'Partially Paid';       
             }
-            inv.Invoice_Closed__c=true;
             update inv;
             
             Payment__c newPayment = new Payment__c();
@@ -1227,62 +1276,72 @@ public with sharing class InvoiceCreationController {
     }
     
     public static void checkOutstandingCreditLimit(List<Invoice__c> newRec) {
-        Id currUser = UserInfo.getUserId();
+        if (newRec.isEmpty()) return;
+        Id hospitalRecordTypeId = Schema.SObjectType.Invoice__c
+            .getRecordTypeInfosByDeveloperName()
+            .get('Hospital_Invoice')
+            .getRecordTypeId();
         
-        Account currUserAcc = [
-            SELECT Id, Available_Credit_Limit__c 
-            FROM Account 
-            WHERE Business_Owner__c = :currUser 
-            LIMIT 1
-        ];
+        List<Invoice__c> dealerInvoices = new List<Invoice__c>();
+        for (Invoice__c inv : newRec) {
+            if (inv.RecordTypeId != hospitalRecordTypeId) {
+                dealerInvoices.add(inv);
+            }
+        }
         
-        List<Invoice__c> existingInvoices = [
-            SELECT Id, Total_Pending_Amount__c 
-            FROM Invoice__c 
-            WHERE Consignee_Dealer__c = :currUserAcc.Id
-        ];
+        if (dealerInvoices.isEmpty()) {
+            return; 
+        }
         
-        Decimal totalPendingAmount = 0;
+        Id currUserId = UserInfo.getUserId();
+        List<Account> accounts = [SELECT Id, Available_Credit_Limit__c FROM Account WHERE Business_Owner__c = :currUserId LIMIT 1];
+        
+        if (accounts.isEmpty()) {
+            return;
+        }
+        
+        Account dealerAcc = accounts[0];
+        
+        List<Invoice__c> existingInvoices = [SELECT Id, Total_Pending_Amount__c FROM Invoice__c WHERE Consignee_Dealer__c = :dealerAcc.Id];
+        
+        Decimal totalPending = 0;
         for (Invoice__c inv : existingInvoices) {
-            totalPendingAmount += inv.Total_Pending_Amount__c != null ? inv.Total_Pending_Amount__c : 0;
+            totalPending += inv.Total_Pending_Amount__c != null ? inv.Total_Pending_Amount__c : 0;
         }
         
-        Set<Id> newInvoiceTempIds = new Set<Id>();
-        for (Invoice__c inv : newRec) {
-            if (inv.Id != null) {
-                newInvoiceTempIds.add(inv.Id);
+        Set<Id> newInvoiceIds = new Set<Id>();
+        for (Invoice__c inv : dealerInvoices) {
+            if (inv.Id != null) newInvoiceIds.add(inv.Id);
+        }
+        
+        Id creditNoteRTId = [SELECT Id FROM RecordType WHERE SobjectType = 'Credit_Note__c' AND DeveloperName = 'Invoice' LIMIT 1].Id;
+        
+        Map<Id, Decimal> creditNoteMap = new Map<Id, Decimal>();
+        
+        if (!newInvoiceIds.isEmpty()) {
+            for (Credit_Note__c note : [
+                SELECT Invoice__c, Amount__c
+                FROM Credit_Note__c
+                WHERE Invoice__c IN :newInvoiceIds AND RecordTypeId = :creditNoteRTId
+            ]) {
+                Decimal amount = note.Amount__c != null ? note.Amount__c : 0;
+                creditNoteMap.put(note.Invoice__c,creditNoteMap.containsKey(note.Invoice__c) ? creditNoteMap.get(note.Invoice__c) + amount : amount);
             }
         }
         
-        Map<Id, Decimal> creditNoteMap = new Map<Id, Decimal>(); 
-           Id recordTypeId =[select Id from RecordType where SobjectType = 'Credit_Note__c' and DeveloperName = 'Invoice'].Id;
-        List<Credit_Note__c> creditNotes = [
-            SELECT Invoice__c, Amount__c 
-            FROM Credit_Note__c 
-            WHERE Invoice__c != null AND Invoice__c IN :newRec AND RecordTypeId =: recordTypeId
-        ];
-        
-        for (Credit_Note__c note : creditNotes) {
-            if (note.Invoice__c != null) {
-                Decimal sum = creditNoteMap.containsKey(note.Invoice__c) ? creditNoteMap.get(note.Invoice__c) : 0;
-                creditNoteMap.put(note.Invoice__c, sum + (note.Amount__c != null ? note.Amount__c : 0));
-            }
-        }
-        
-        Decimal adjustedNewInvoiceTotal = 0;
-        for (Invoice__c inv : newRec) {
-            Decimal original = inv.Total_Pending_Amount__c != null ? inv.Total_Pending_Amount__c : 0;
+        Decimal adjustedNew = 0;
+        for (Invoice__c inv : dealerInvoices) {
+            Decimal orig = inv.Total_Pending_Amount__c != null ? inv.Total_Pending_Amount__c : 0;
             Decimal credit = creditNoteMap.containsKey(inv.Id) ? creditNoteMap.get(inv.Id) : 0;
-            adjustedNewInvoiceTotal += (original - credit);
+            adjustedNew += (orig - credit);
         }
         
-        Decimal projectedTotal = totalPendingAmount + adjustedNewInvoiceTotal;
+        Decimal projected = totalPending + adjustedNew;
         
-        if (projectedTotal > currUserAcc.Available_Credit_Limit__c) {
-            for (Invoice__c inv : newRec) {
-                inv.addError('⚠️Cannot create invoice: Credit limit exceeded.');
+        if (projected > dealerAcc.Available_Credit_Limit__c) {
+            for (Invoice__c inv : dealerInvoices) {
+                inv.addError('⚠️ Cannot create invoice: Credit limit exceeded.');
             }
         }
-    }
-    
+    }    
 }
