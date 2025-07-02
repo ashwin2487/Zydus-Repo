@@ -694,7 +694,7 @@ export default class OnboardingProcess extends LightningElement {
                 }
                 break;
 
-            case 'panNumber':             
+            case 'panNumber':
                 if (this.panNumber?.length > 10)
                     return 'PAN Number cannot be more than 10 characters.';
                 if (mode === 'submit') {
@@ -716,13 +716,14 @@ export default class OnboardingProcess extends LightningElement {
                         return 'Invalid GST format (e.g. 27ABCDE1234F1Z5).';
                 }
                 break;
-            case 'mobile':      
+
+            case 'mobile':
                 if (this.mobile?.length > 10)
                     return 'Mobile Number cannot exceed 10 digits.';
                 if (mode === 'submit' && !/^\d{10}$/.test(this.mobile))
                     return 'Mobile Number must be a valid 10-digit number.';
                 break;
-            case 'pin': 
+            case 'pin':
                 if (this.pin?.length > 6)
                     return 'PIN Code cannot exceed 6 digits.';
                 if (mode === 'submit' && !/^\d{6}$/.test(this.pin))

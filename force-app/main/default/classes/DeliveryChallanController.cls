@@ -1,7 +1,6 @@
 public with sharing class DeliveryChallanController {
     @AuraEnabled(cacheable=true)
     public static DeliveryChallanWrapper getDeliveryChallanDetails(Id recordId) {
-        // Return empty wrapper if recordId is null
         if (recordId == null) {
             return new DeliveryChallanWrapper(null, new List<Warehouse__c>(), new List<Warehouse__c>());
         }
@@ -79,18 +78,15 @@ public with sharing class DeliveryChallanController {
                 LIMIT 1
             ];
             
-            // If no delivery challan found, return empty wrapper
             if (deliveryChallans.isEmpty()) {
                 return new DeliveryChallanWrapper(null, new List<Warehouse__c>(), new List<Warehouse__c>());
             }
             
             Delivery_Challan__c deliveryChallan = deliveryChallans[0];
             
-            // Initialize warehouse lists
             List<Warehouse__c> consignorWarehouses = new List<Warehouse__c>();
             List<Warehouse__c> consigneeWarehouses = new List<Warehouse__c>();
             
-            // Fetch consignor warehouses only if Consignor_Distributor__c is not null
             if (deliveryChallan.Consignor_Distributor__c != null) {
                 try {
                     consignorWarehouses = [
@@ -105,7 +101,6 @@ public with sharing class DeliveryChallanController {
                 }
             }
             
-            // Fetch consignee warehouses only if Consignee_Distributor__c is not null
             if (deliveryChallan.Consignee_Distributor__c != null) {
                 try {
                     consigneeWarehouses = [
@@ -124,7 +119,6 @@ public with sharing class DeliveryChallanController {
             
         } catch (Exception e) {
             System.debug('Error in getDeliveryChallanDetails: ' + e.getMessage());
-            // Return empty wrapper in case of any exception
             return new DeliveryChallanWrapper(null, new List<Warehouse__c>(), new List<Warehouse__c>());
         }
     }
@@ -136,10 +130,8 @@ public with sharing class DeliveryChallanController {
         }
         
         try {
-            // Get the SObject type from the record ID
             String sObjectType = recordId.getSObjectType().getDescribe().getName();
             
-            // Dynamic SOQL to get RecordTypeId from the record
             String query = 'SELECT RecordTypeId FROM ' + sObjectType + ' WHERE Id = :recordId LIMIT 1';
             List<SObject> records = Database.query(query);
             
@@ -149,7 +141,6 @@ public with sharing class DeliveryChallanController {
             
             Id recordTypeId = (Id) records[0].get('RecordTypeId');
             
-            // Query RecordType to get the name
             List<RecordType> recordTypes = [SELECT Name FROM RecordType WHERE Id = :recordTypeId LIMIT 1];
             
             if (recordTypes.isEmpty()) {
@@ -175,7 +166,6 @@ public with sharing class DeliveryChallanController {
             this.consigneeWarehouses = consigneeWh != null ? consigneeWh : new List<Warehouse__c>();
         }
         
-        // Utility methods to check if data exists
         @AuraEnabled 
         public Boolean getHasDeliveryChallan() {
             return this.deliveryChallan != null;

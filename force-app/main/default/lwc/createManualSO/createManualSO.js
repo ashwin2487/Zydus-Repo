@@ -1,6 +1,7 @@
 import { LightningElement, wire, api, track } from 'lwc';
 import { getRecord } from 'lightning/uiRecordApi';
 import getConsigneeDistributor from '@salesforce/apex/SupplyOrderController.getConsigneeDistributor';
+import latestSOName from '@salesforce/apex/SupplyOrderController.latestSOName';
 import getProductByPB from '@salesforce/apex/SupplyOrderController.getProductByPB';
 import getWarehouseLineItem from '@salesforce/apex/SupplyOrderController.getWarehouseLineItem';
 import getProductForConsignee from '@salesforce/apex/SupplyOrderController.getProductForConsignee';

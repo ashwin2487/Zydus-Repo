@@ -13,6 +13,9 @@ export default class CreateSo extends LightningElement {
     @wire(getOpportunityWithWarehouseData, { purchaseOrderId: '$recordId' })
     wiredData({ error, data }) {
         if (data) {
+
+            console.log('DATA',data);
+            // this.lineItems = data.purchaseOrderLineItems;)
             this.lineItems = data.map(item => {
                 const unitPrice = parseFloat(item.unitPrice || 0);
                 const cgst = parseFloat(item.cgst || 0);

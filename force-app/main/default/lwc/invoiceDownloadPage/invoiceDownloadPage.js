@@ -165,7 +165,7 @@ export default class InvoiceDownloadPage extends LightningElement {
             this.patientGender = this.invoiceDetails.Patient_Gender__c;
             this.ipNumber = this.invoiceDetails.IP_Number__c;
             this.cathNumber = this.invoiceDetails.CATH_Number__c;
-            this.comments = this.invoiceDetails.Comments__c;
+            this.comments = this.invoiceDetails.Comment__c;
 
             this.totalAmount = this.invoiceDetails.Total_Amount__c || 0;
             this.totalCGSTAmount = this.invoiceDetails.Total_CGST__c || 0;
@@ -194,6 +194,7 @@ export default class InvoiceDownloadPage extends LightningElement {
                 //const totalBeforeTax = (parseFloat(unitPrice) * parseFloat(item.Quantity__c || 1)).toFixed(2); // New field
                 this.netFinalAmount = netAmount;
                 this.scheme = item.Scheme__c || '';
+                const totalBeforeTax = item.Before_Tax_Amount__c;
 
                 this.invoiceItems.push({
                     id: counter++,
@@ -205,7 +206,7 @@ export default class InvoiceDownloadPage extends LightningElement {
                     batchNumber: item.Batch_Number__c,
                     serialNumber: item.Serial_Number__c,
                     unitPrice: unitPrice,
-                    totalBeforeTax: 10, // NEW FIELD
+                    billDiscountAmt: item.Bill_Discount_Amount__c, // NEW FIELD
                     hsn: item.HSN__c,
                     mfgDate: item.Manufacture_Date__c,
                     expiryDate: item.Expiry_Date__c,
@@ -213,13 +214,13 @@ export default class InvoiceDownloadPage extends LightningElement {
                     sgst: sgst,
                     igst: igst,
                     netAmount: netAmount,
-                    cgstRate: ((cgst * 100) / netAmount).toFixed(2),
-                    sgstRate: ((sgst * 100) / netAmount).toFixed(2),
-                    igstRate: ((igst * 100) / netAmount).toFixed(2)
+                    cgstRate: ((cgst * 100) / totalBeforeTax).toFixed(2),
+                    sgstRate: ((sgst * 100) / totalBeforeTax).toFixed(2),
+                    igstRate: ((igst * 100) / totalBeforeTax).toFixed(2)
                 });
             });
 
-            this.amountInWords = this.convertNumberToWords(this.netFinalAmount);
+            this.amountInWords = this.convertNumberToWords(this.totalAmount);
         } else if (error) {
             this.error = error;
             this.invoiceDetails = undefined;
@@ -381,7 +382,7 @@ export default class InvoiceDownloadPage extends LightningElement {
         const drawTableHeaders = (startY) => {
             const mainHeaders = [
                 'Sr. No.', 'Product Name', 'Diameter', 'Length', 'Description', 'Batch No', 'Sr. No.',
-                'Mfg. Date', 'Exp. Date', 'HSN', 'Total Before Tax', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total Value'
+                'Mfg. Date', 'Exp. Date', 'HSN', 'Bill discount Amt', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total Value'
             ];
 
             const mergedWidths = [
@@ -706,8 +707,8 @@ export default class InvoiceDownloadPage extends LightningElement {
                     item.mfgDate || '',
                     item.expiryDate || '',
                     item.hsn || '',
-                    item.totalBeforeTax?.toString() || '0.00',
-                    10, // Taxable value
+                    item.billDiscountAmt?.toString() || '0.00',
+                    item.unitPrice,
                     (item.cgstRate || 0) + '%',
                     (item.cgst || 0),
                     (item.sgstRate || 0) + '%',
