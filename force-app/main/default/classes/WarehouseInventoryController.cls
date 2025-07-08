@@ -5,8 +5,11 @@ public without sharing class WarehouseInventoryController {
         List<Id> warehouseIds,
         String statusFilter
     ) {
+        
+        
         Date today = Date.today();
         Date aboutToExpireCutoff = today.addDays(30);
+        
         List<Warehouse_Product_Line_Items__c> items = [
             SELECT
             Id,
@@ -33,8 +36,6 @@ public without sharing class WarehouseInventoryController {
             Connected_Warehouse__c IN :warehouseIds
             AND Status__c = :statusFilter
         ];
-        
-        System.debug('items:'+items);
         
         List<Map<String, Object>> rows = new List<Map<String, Object>>();
         
@@ -126,8 +127,8 @@ public without sharing class WarehouseInventoryController {
             return 'Near Expiry';
         } else if (item.Condition__c == 'Damaged') {
             return 'Damaged';
-        } else if (item.Status__c == 'Restricted') {
-            return 'Restricted';
+        } else if (item.Status__c == 'Material Returned') {
+            return 'Material Returned';
         } else if (item.Status__c == 'In Transit') {
             return 'In Transit';
         } else {
@@ -148,7 +149,6 @@ public without sharing class WarehouseInventoryController {
         final Date manufacturedDate;
         final String distributor;
         final String hospital;
-        
         Decimal totalQty       = 0;
         Decimal totalValue     = 0;
         Decimal expiredQty     = 0;
@@ -158,11 +158,9 @@ public without sharing class WarehouseInventoryController {
         Integer inTransitDamaged = 0;
         Integer restricted      = 0;
         Date    lastUsageDate   = null;
-        
         Date    expiryDate      = null;
         Integer balanceExpDays  = null;
         String  expiryCategory  = null;
-        
         String  stockStage      = null;
         public AggregateInfo(String warehouseName, String productName, String materialCode, 
                              String brand, String size, String uom, Decimal mrp, 
@@ -266,129 +264,267 @@ public without sharing class WarehouseInventoryController {
             }
         }
         
-        Set<Id> hospWH=new Set<Id>();
-        List<Account_Hospital__c> AccHosp=[SELECT Id, Hospital__c, Hospital__r.Warehouse__c FROM Account_Hospital__c WHERE Account__c IN :relatedAccountIds];
+        Set<Id> hospIds=new Set<Id>();
+        List<Account_Hospital__c> AccHosp=[SELECT Id, Hospital__c FROM Account_Hospital__c WHERE Account__c IN :relatedAccountIds];
         
         for(Account_Hospital__c ah:AccHosp){
-            hospWH.add(ah.Hospital__r.Warehouse__c);
+            hospIds.add(ah.Hospital__c);
         }
         
         return [
             SELECT Id, Name 
             FROM Warehouse__c 
-            WHERE Account__c IN :relatedAccountIds  OR  Id IN :hospWH
+            WHERE Account__c IN :relatedAccountIds  OR Hospital__c IN :hospIds
         ];
         
     }
+    
     
     @AuraEnabled(cacheable=true)
     public static List<Warehouse_Product_Line_Items__c> getWPLIs(Id warehouseId) {
-        List<Warehouse_Product_Line_Items__c> wpliList = [
-            SELECT Id, Name, Connected_Warehouse__r.Name, Warehouse__r.Zydus_Product__r.Name, Serial_Number__c, Batch_Number__c, Expiry_Date__c, Condition__c, RSO_Created__c
-            FROM Warehouse_Product_Line_Items__c
-            WHERE Connected_Warehouse__c = :warehouseId
-            AND Status__c='Free'
-            AND RSO_Created__c = false
-        ];
-        System.debug('WPLIs for warehouse ' + warehouseId + ': ' + wpliList);
-        return wpliList;
-    }
-    
-    
-    @AuraEnabled
-    public static void createReverseSupplyOrders(List<Id> selectedWpliIds) {
-        System.debug('### INPUT selectedWpliIds: ' + selectedWpliIds);
-        
-        if (selectedWpliIds == null || selectedWpliIds.isEmpty()) {
-            System.debug('### EXIT: selectedWpliIds is null or empty.');
-            return;
+        if (warehouseId == null) {
+            return new List<Warehouse_Product_Line_Items__c>();
         }
         
+        try {
+            Warehouse__c warehouse = [SELECT RecordType.Name FROM Warehouse__c WHERE Id = :warehouseId LIMIT 1];
+            
+            String query = 'SELECT Id, Name, Connected_Warehouse__r.Name, Warehouse__r.Zydus_Product__r.Name, ' +
+                'Serial_Number__c, Batch_Number__c, Expiry_Date__c, Status__c, Condition__c, RSO_Created__c ' +
+                'FROM Warehouse_Product_Line_Items__c ' +
+                'WHERE Connected_Warehouse__c = :warehouseId AND RSO_Created__c = false AND Status__c = \'Free\' ';
+            
+            if (warehouse.RecordType.Name == 'Hospital') {
+                Id currentUserId = UserInfo.getUserId();
+                query += ' AND Delivery_Challan_Line_Item__r.Delivery_Challan__r.OwnerId = :currentUserId';
+            }
+            
+            return Database.query(query);
+            
+        } catch (Exception e) {
+            throw new AuraHandledException('An error occurred while retrieving items: ' + e.getMessage());
+        }
+    }
+    
+    @AuraEnabled
+    public static Id createReverseSupplyOrders(List<Id> selectedWpliIds) {
+        if (selectedWpliIds == null || selectedWpliIds.isEmpty()) {
+            System.debug('No WPLI IDs provided. Exiting.');
+            return null;
+        }
+        Id currUserId = UserInfo.getUserId();
         List<Warehouse_Product_Line_Items__c> wplis = [
-            SELECT Id, 
-            Name,
-            Batch_Number__c,
-            Serial_Number__c,
-            Expiry_Date__c,
-            Manufactured_Date__c,
-            RSO_Created__c,
-            Warehouse__r.Zydus_Product__c,
-            Supply_Order_Line_Item__r.CGST__c,
-            Supply_Order_Line_Item__r.IGST__c,
-            Supply_Order_Line_Item__r.SGST__c,
-            Supply_Order_Line_Item__r.Net_Amount__c,
-            Supply_Order_Line_Item__r.Zydus_Price_Book_Entry__c,
-            Supply_Order_Line_Item__r.Zydus_Price_Book_Entry__r.List_Price__c,
+            SELECT
+            Id, Name, Batch_Number__c, Serial_Number__c, Expiry_Date__c, Manufactured_Date__c,
+            Warehouse__r.Zydus_Product__c, Warehouse__r.Zydus_Product__r.HSN_Code__c, Connected_Warehouse__c,
+            Supply_Order_Line_Item__r.Unit_Price__c,
             GRN__r.Delivery_Challan__r.Supply_Order__c,
             GRN__r.Delivery_Challan__r.Supply_Order__r.Name,
             GRN__r.Delivery_Challan__r.Supply_Order__r.New_Purchase_Order__c,
+            GRN__r.Delivery_Challan__r.Supply_Order__r.Consignor_Distributor__c,
             GRN__r.Delivery_Challan__r.Supply_Order__r.Consignee_Distributor__c,
-            GRN__r.Delivery_Challan__r.Supply_Order__r.Consignor_Distributor__c
+            GRN__r.Delivery_Challan__r.Consignee_Distributor__c,
+            GRN__r.Delivery_Challan__r.Consignee_Hospital__c,
+            GRN__r.Delivery_Challan__r.Consignor_Distributor__c,
+            GRN__r.Delivery_Challan__r.RecordType.DeveloperName
             FROM Warehouse_Product_Line_Items__c
-            WHERE Id IN :selectedWpliIds
+            WHERE Id IN : selectedWpliIds
         ];
         
-        Map<Id, List<Warehouse_Product_Line_Items__c>> soToWplis = new Map<Id, List<Warehouse_Product_Line_Items__c>>();
+        Map<String, List<Warehouse_Product_Line_Items__c>> groupedWplis = new Map<String, List<Warehouse_Product_Line_Items__c>>();
+        Set<Id> hsnIds = new Set<Id>();
+        Set<Id> consigneeDistributorIds = new Set<Id>();
+        Set<Id> consigneeHospitalIds = new Set<Id>();
+        Set<Id> consignorDistributorIds = new Set<Id>();
         
         for (Warehouse_Product_Line_Items__c wpli : wplis) {
-            Id soId = wpli.GRN__r?.Delivery_Challan__r?.Supply_Order__c;
+            String groupKey;
             
-            if (soId != null) {
-                if (!soToWplis.containsKey(soId)) {
-                    soToWplis.put(soId, new List<Warehouse_Product_Line_Items__c>());
+            if (wpli.GRN__r?.Delivery_Challan__r?.RecordType?.DeveloperName == 'HDC') {
+                
+                groupKey = 'DC_' + wpli.GRN__r.Delivery_Challan__c;
+                
+                if (wpli.GRN__r?.Delivery_Challan__r?.Consignee_Hospital__c != null) {
+                    consigneeHospitalIds.add(wpli.GRN__r.Delivery_Challan__r.Consignee_Hospital__c);
                 }
-                soToWplis.get(soId).add(wpli);
+                if (wpli.GRN__r?.Delivery_Challan__r?.Consignor_Distributor__c != null) {
+                    consignorDistributorIds.add(wpli.GRN__r.Delivery_Challan__r.Consignor_Distributor__c);
+                }
+            } else {
+                Id soId = wpli.GRN__r?.Delivery_Challan__r?.Supply_Order__c;
+                if (soId != null) {
+                    groupKey = 'SO_' + soId;
+                    
+                    if (wpli.GRN__r?.Delivery_Challan__r?.Consignee_Distributor__c != null) {
+                        consigneeDistributorIds.add(wpli.GRN__r.Delivery_Challan__r.Consignee_Distributor__c);
+                    }
+                }
+            }
+            
+            if (groupKey != null) {
+                if (!groupedWplis.containsKey(groupKey)) {
+                    groupedWplis.put(groupKey, new List<Warehouse_Product_Line_Items__c>());
+                }
+                groupedWplis.get(groupKey).add(wpli);
+                
+                if (wpli.Warehouse__r?.Zydus_Product__r?.HSN_Code__c != null) {
+                    hsnIds.add(wpli.Warehouse__r.Zydus_Product__r.HSN_Code__c);
+                }
             }
         }
         
-        Id rsoRT = getRecordTypeId('Supply_Order__c', 'RSO');
-        
-        List<Supply_Order__c> newSOs = new List<Supply_Order__c>();
-        
-        Map<Id, Supply_Order__c> originalToReverseSO = new Map<Id, Supply_Order__c>();
-        for (Id originalSoId : soToWplis.keySet()) {
-            Warehouse_Product_Line_Items__c sample = soToWplis.get(originalSoId)[0];
-            
-            Supply_Order__c rso = new Supply_Order__c(
-                RecordTypeId = rsoRT,
-                Consignee_Distributor__c = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.Consignor_Distributor__c,
-                Consignor_Distributor__c = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.Consignee_Distributor__c,
-                Supply_Order__c = originalSoId,
-                New_Purchase_Order__c = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.New_Purchase_Order__c,
-                SO_Generated_Date__c = Date.today()
-            );
-            
-            newSOs.add(rso);
-            originalToReverseSO.put(originalSoId, rso);
+        if (groupedWplis.isEmpty()) {
+            return null;
         }
         
-        insert newSOs;
+        Map<Id, Account> consigneeDistributorMap = new Map<Id, Account>();
+        for (Id distributorId : consigneeDistributorIds) {
+            Account parentAccount = AccountAccessUtil.getParentBusinessOwner(distributorId);
+            consigneeDistributorMap.put(distributorId, parentAccount);
+        }
+       
+        Map<Id, Account> consignorDistributorMap = new Map<Id, Account>();
+        for (Id distributorId : consignorDistributorIds) {
+            Account parentAccount = AccountAccessUtil.getParentBusinessOwner(distributorId);
+            consignorDistributorMap.put(distributorId, parentAccount);
+        }
         
-        Map<String, SO_Product__c> soProductKeyMap = new Map<String, SO_Product__c>();
-        List<SO_Product__c> soProducts = new List<SO_Product__c>();
-        List<Supply_Order_Line_Item__c> soLineItems = new List<Supply_Order_Line_Item__c>();
+        Map<Id, Hospital__c> hospitalMap = new Map<Id, Hospital__c>();
+        if (!consigneeHospitalIds.isEmpty()) {
+            hospitalMap = new Map<Id, Hospital__c>([SELECT Id, Name, State__c FROM Hospital__c WHERE Id IN :consigneeHospitalIds]);
+        }
         
-        final String ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        Map<Id, Integer> productToSuffix = new Map<Id, Integer>(); 
+        Id rsoRT = getRecordTypeId('Supply_Order__c', 'RSO');
+        List<Supply_Order__c> newSOsToInsert = new List<Supply_Order__c>();
         
-        for (Id soId : soToWplis.keySet()) {
-            Supply_Order__c rso = originalToReverseSO.get(soId);
+        for (String groupKey : groupedWplis.keySet()) {
+            Warehouse_Product_Line_Items__c sample = groupedWplis.get(groupKey)[0];
+            Supply_Order__c rso = new Supply_Order__c();
             
-            String orderNumber = [SELECT Id, Name FROM Supply_Order__c WHERE Id=:rso.Id].Name.replace('SO-', '');
+            rso.RecordTypeId = rsoRT;
+            rso.SO_Generated_Date__c = Date.today();
             
-            for (Warehouse_Product_Line_Items__c wpli : soToWplis.get(soId)) {
+            if (groupKey.startsWith('DC_')) {
+                
+                Id hospitalId = sample.GRN__r.Delivery_Challan__r.Consignee_Hospital__c;
+                Id consignorId = sample.GRN__r.Delivery_Challan__r.Consignor_Distributor__c;
+                
+                Account consignorDistributor = consignorDistributorMap.get(consignorId);
+                
+                rso.Name = latestSOName(consignorDistributor.Zydus_Mapping__c);
+                rso.Consignor_Distributor__c = consignorDistributor.Id; 
+                rso.Consignee_Distributor__c = consignorDistributor.Zydus_Mapping__c;
+                rso.ownerId = consignorDistributor.Business_Owner__c;
+                rso.Delivery_Challan__c = sample.GRN__r.Delivery_Challan__c;
+                
+            } else {
+                Id originalSoId = sample.GRN__r.Delivery_Challan__r.Supply_Order__c;
+                Id consigneeDistributorId = sample.GRN__r.Delivery_Challan__r.Consignee_Distributor__c;
+                
+                Account consigneeDistributor = consigneeDistributorMap.get(consigneeDistributorId);
+                
+                rso.Name = latestSOName(consigneeDistributor.Zydus_Mapping__c);
+                rso.Consignee_Distributor__c = consigneeDistributor.Zydus_Mapping__c;
+                rso.Consignor_Distributor__c = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.Consignee_Distributor__c;
+                rso.Supply_Order__c = originalSoId;
+                rso.New_Purchase_Order__c = sample.GRN__r.Delivery_Challan__r.Supply_Order__r.New_Purchase_Order__c;
+                rso.ownerId = consigneeDistributor.Business_Owner__c;
+            }
+            
+            newSOsToInsert.add(rso);
+        }
+        
+        insert newSOsToInsert;
+        
+        List<Supply_Order__c> newSOs = [
+            SELECT Id, Name, Supply_Order__c, Delivery_Challan__c, Consignee_Distributor__c, Consignor_Distributor__c
+            FROM Supply_Order__c
+            WHERE Id IN :newSOsToInsert
+        ];
+        
+        List<SO_Product__c> soProductsToInsert = new List<SO_Product__c>();
+        Set<String> soProductKeys = new Set<String>();
+        for (Supply_Order__c rso : newSOs) {
+            String lookupKey = rso.Supply_Order__c != null ? 'SO_' + rso.Supply_Order__c : 'DC_' + rso.Delivery_Challan__c;
+            List<Warehouse_Product_Line_Items__c> relatedWplis = groupedWplis.get(lookupKey);
+            
+            for (Warehouse_Product_Line_Items__c wpli : relatedWplis) {
                 Id productId = wpli.Warehouse__r.Zydus_Product__c;
                 String key = rso.Id + '-' + productId;
-                
-                if (!soProductKeyMap.containsKey(key)) {
-                    SO_Product__c sop = new SO_Product__c(
+                if (!soProductKeys.contains(key)) {
+                    soProductsToInsert.add(new SO_Product__c(
                         Zydus_Product__c = productId,
                         Supply_Order__c = rso.Id
-                    );
-                    soProducts.add(sop);
-                    soProductKeyMap.put(key, sop);
+                    ));
+                    soProductKeys.add(key);
                 }
-                Integer suffixIndex = productToSuffix.containsKey(productId) ? productToSuffix.get(productId) : 1;
+            }
+        }
+        insert soProductsToInsert;
+        
+        Map<String, Id> productKeyToSoProductId = new Map<String, Id>();
+        for (SO_Product__c sop : soProductsToInsert) {
+            productKeyToSoProductId.put(sop.Supply_Order__c + '-' + sop.Zydus_Product__c, sop.Id);
+        }
+        
+        List<Supply_Order_Line_Item__c> soLineItemsToInsert = new List<Supply_Order_Line_Item__c>();
+        
+        final String ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        Map<Id, Integer> productToSopNumber = new Map<Id, Integer>();
+        Map<Id, Integer> productToSuffix   = new Map<Id, Integer>();
+        
+        for (Supply_Order__c rso : newSOs) {
+            String lookupKey = rso.Supply_Order__c != null ? 'SO_' + rso.Supply_Order__c : 'DC_' + rso.Delivery_Challan__c;
+            List<Warehouse_Product_Line_Items__c> relatedWplis = groupedWplis.get(lookupKey);
+            
+            String buyerState = [SELECT State__c FROM Account WHERE Id = :rso.Consignee_Distributor__c].State__c;
+            String supplierState = [SELECT State__c FROM Account WHERE Id = :rso.Consignor_Distributor__c].State__c;
+            
+            String supplyType = (buyerState != null && buyerState == supplierState) ? 'Intra-State' : 'Inter-State';
+            
+            Id priceBookId = [SELECT Zydus_Price_Book__c FROM Account WHERE Id = :rso.Consignor_Distributor__c].Zydus_Price_Book__c;
+            
+            Map<Id, Id> zydusPbeMap = new Map<Id, Id>();
+            if (priceBookId != null) {
+                for (Zydus_Price_Book_Entry__c pbe :
+                     [SELECT Id, Zydus_Product__c FROM Zydus_Price_Book_Entry__c WHERE Zydus_Price_Book__c = :priceBookId]) {
+                         zydusPbeMap.put(pbe.Zydus_Product__c, pbe.Id);
+                     }
+            }
+            Map<Id, Zydus_Price_Book_Entry__c> priceBookEntryMap = new Map<Id, Zydus_Price_Book_Entry__c>(
+                [SELECT Id, Unit_Price__c FROM Zydus_Price_Book_Entry__c WHERE Id IN :zydusPbeMap.values()]
+            );
+            
+            Map<String, HSN_Tax_Master_Link__c> taxMap = new Map<String, HSN_Tax_Master_Link__c>();
+            if (!hsnIds.isEmpty()) {
+                for (HSN_Tax_Master_Link__c tax :
+                     [SELECT HSN_Code__c, CGST__c, SGST__c, IGST__c
+                      FROM HSN_Tax_Master_Link__c
+                      WHERE HSN_Code__c IN :hsnIds
+                      AND Supply_Type__c = :supplyType
+                      AND Tax_Master__r.Is_Active__c = TRUE
+                      AND Tax_Master__r.Effective_From__c <= :Date.today()
+                      AND (Tax_Master__r.Effective_To__c = NULL OR Tax_Master__r.Effective_To__c >= :Date.today())
+                     ]) {
+                         taxMap.put(tax.HSN_Code__c, tax);
+                     }
+            }
+            
+            String orderNumber = rso.Name.replace('RSO-', '');
+            Integer productCounter = 1;
+            
+            for (Warehouse_Product_Line_Items__c wpli : relatedWplis) {
+                Id productId = wpli.Warehouse__r.Zydus_Product__c;
+                
+                if (!productToSopNumber.containsKey(productId)) {
+                    productToSopNumber.put(productId, productCounter);
+                    productCounter++;
+                }
+                Integer sopNumber = productToSopNumber.get(productId);
+                
+                Integer suffixIndex = productToSuffix.containsKey(productId)
+                    ? productToSuffix.get(productId)
+                    : 1;
                 String baseSuffix = '';
                 Integer temp = suffixIndex;
                 while (temp > 0) {
@@ -397,71 +533,84 @@ public without sharing class WarehouseInventoryController {
                     temp = (temp - 1) / 26;
                 }
                 productToSuffix.put(productId, suffixIndex + 1);
-                String name = 'SOP' + String.valueOf(suffixIndex) + '/' + orderNumber + '/' + baseSuffix;
                 
+                Decimal unitPrice = 0;
+                Id pbeId = zydusPbeMap.get(productId);
+                if (pbeId != null) {
+                    Zydus_Price_Book_Entry__c entry = priceBookEntryMap.get(pbeId);
+                    if (entry != null && entry.Unit_Price__c != null) {
+                        unitPrice = entry.Unit_Price__c;
+                    }
+                }
+                
+                Decimal cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+                Id hsnCodeId = wpli.Warehouse__r?.Zydus_Product__r?.HSN_Code__c;
+                if (hsnCodeId != null && taxMap.containsKey(hsnCodeId)) {
+                    HSN_Tax_Master_Link__c tax = taxMap.get(hsnCodeId);
+                    if (supplyType == 'Intra-State') {
+                        cgstAmount = (unitPrice * tax.CGST__c) / 100;
+                        sgstAmount = (unitPrice * tax.SGST__c) / 100;
+                    } else {
+                        igstAmount = (unitPrice * tax.IGST__c) / 100;
+                    }
+                }
+                Decimal netAmount = unitPrice + cgstAmount + sgstAmount + igstAmount;
+                
+                String soliName = 'RSOP' + sopNumber + '/' + orderNumber + '/' + baseSuffix;
                 Supply_Order_Line_Item__c soli = new Supply_Order_Line_Item__c(
-                    Name = name,
+                    Name = soliName,
+                    Supply_Order__c = rso.Id,
                     Zydus_Product__c = productId,
+                    Unit_Price__c = unitPrice,
+                    Warehouse__c = wpli.Connected_Warehouse__c,
+                    HSN_Code__c = wpli.Warehouse__r.Zydus_Product__r.HSN_Code__c,
+                    CGST__c = cgstAmount,
+                    SGST__c = sgstAmount,
+                    IGST__c = igstAmount,
+                    Net_Amount__c = netAmount,
+                    SO_Product__c = productKeyToSoProductId.get(rso.Id + '-' + productId),
                     Serial_Number__c = wpli.Serial_Number__c,
                     Batch_Number__c = wpli.Batch_Number__c,
                     Expiry_Date__c = wpli.Expiry_Date__c,
+                    Manufacturing_Date__c = wpli.Manufactured_Date__c,
                     Warehouse_Product_Line_Item__c = wpli.Id,
-                    Supply_Order__c = rso.Id,
-                    Net_Amount__c = (wpli.Supply_Order_Line_Item__r != null) ? wpli.Supply_Order_Line_Item__r.Net_Amount__c : null,
-                    Zydus_Price_Book_Entry__c = wpli.Supply_Order_Line_Item__r.Zydus_Price_Book_Entry__c,
-                    Unit_Price__c = wpli.Supply_Order_Line_Item__r.Zydus_Price_Book_Entry__r.List_Price__c,
-                    SO_Product__c = soProductKeyMap.get(key).Id,
-                    Manufacturing_Date__c = wpli.Manufactured_Date__c
+                    Zydus_Price_Book_Entry__c = pbeId
                 );
-                
-                System.debug('SOLI is :' + soli);
-                soLineItems.add(soli);
-            }
-        }
-
-        
-        insert soProducts;
-        
-        Map<String, Id> productKeyToId = new Map<String, Id>();
-        for (SO_Product__c sop : soProducts) {
-            productKeyToId.put(sop.Supply_Order__c + '-' + sop.Zydus_Product__c, sop.Id);
-        }
-        
-        Map<Id, Warehouse_Product_Line_Items__c> wpliMap = new Map<Id, Warehouse_Product_Line_Items__c>();
-        for (Warehouse_Product_Line_Items__c w : wplis) {
-            wpliMap.put(w.Id, w);
-        }
-        
-        for (Supply_Order_Line_Item__c soli : soLineItems) {
-            Id wpliId = soli.Warehouse_Product_Line_Item__c;
-            Warehouse_Product_Line_Items__c wpli = wpliMap.get(wpliId);
-            if (wpli != null) {
-                Id originalSoId = wpli.GRN__r.Delivery_Challan__r.Supply_Order__c;
-                Supply_Order__c rso = originalToReverseSO.get(originalSoId);
-                if (rso != null) {
-                    String key = rso.Id + '-' + wpli.Warehouse__r.Zydus_Product__c;
-                    soli.SO_Product__c = productKeyToId.get(key);
-                }
+                soLineItemsToInsert.add(soli);
             }
         }
         
-        insert soLineItems;
+        if (!soLineItemsToInsert.isEmpty()) {
+            insert soLineItemsToInsert;
+        }
+        
         for (Warehouse_Product_Line_Items__c wpli : wplis) {
             wpli.RSO_Created__c = true;
+            wpli.Status__c = 'Material Returned';
         }
-        
         update wplis;
         
-        for(Supply_Order__c rso:newSOs){
+        List<Supply_Order__c> newSOsWithRelations = [
+            SELECT Id, Name, Consignor_Distributor__r.Business_Owner__c, Consignee_Distributor__r.Business_Owner__c 
+            FROM Supply_Order__c 
+            WHERE Id IN :newSOsToInsert
+        ];
+        
+        for (Supply_Order__c rso : newSOsWithRelations) {
             NotificationService.notifyUsers(
-                new Set<String>{rso.Consignor_Distributor__r.Business_Owner__c, rso.Consignee_Distributor__r.Business_Owner__c},
+                new Set<String>{
+                    rso.Consignor_Distributor__r.Business_Owner__c,
+                        rso.Consignee_Distributor__r.Business_Owner__c
+                        },
                 rso.Id,
                 'New RSO Created',
-                'An RSO "' + rso.Name + '" has been created due to receipt of damaged, wrong, expired items, or other reason. Please review and take appropriate action.'
+                'An RSO "' + rso.Name + '" has been created. Please review and take appropriate action.'
             );
-        }        
+        }
+        
+        return newSOsToInsert[0].Id;
     }
-      
+    
     public static Id getRecordTypeId(String objectName, String developerName) {
         RecordType rt = [
             SELECT Id 
@@ -477,4 +626,62 @@ public without sharing class WarehouseInventoryController {
         return [SELECT Id FROM Warehouse__c WHERE Account__c = :recordId OR Hospital__c=:recordId];
     }
     
+    @AuraEnabled
+    public static String latestSOName(Id accountId) {
+        Account acc = [SELECT Id, Name FROM Account WHERE Id = :accountId LIMIT 1];
+        String accName = acc.Name;
+        
+        String[] accParts = accName != null ? accName.split(' ') : new String[0];
+        String firstWord = accParts.size() > 0 ? accParts[0] : 'Account';
+        
+        List<Supply_Order__c> soList = [
+            SELECT Name
+            FROM Supply_Order__c
+            WHERE Name LIKE :('RSO-' + firstWord + '-%')
+            ORDER BY CreatedDate DESC
+        ];
+        
+        Integer nextNumber = 1;
+        
+        for (Supply_Order__c so : soList) {
+            
+            List<String> parts = so.Name.split('-');
+            if (parts.size() == 3 && Pattern.matches('\\d+', parts[2])) {
+                Integer num = Integer.valueOf(parts[2]);
+                if (num >= nextNumber) {
+                    nextNumber = num + 1;
+                }
+            }
+        }
+        
+        String nextNumberStr = String.valueOf(100000 + nextNumber).substring(1);
+        return 'RSO-' + firstWord + '-' + nextNumberStr;
+    }
+    
+    @AuraEnabled
+    public static Boolean shouldRSObtnVisible(String warehouseId) {
+        Id currUserId = UserInfo.getUserId();
+        
+        if (String.isBlank(warehouseId)) {
+            return false;
+        }
+        Warehouse__c warehouse = [
+            SELECT Account__r.Business_Owner__c, RecordType.Name, Hospital__c
+            FROM Warehouse__c
+            WHERE Id = :warehouseId
+            LIMIT 1
+        ];
+        
+        if (warehouse.RecordType.Name !='Hospital' && warehouse.Account__r != null && warehouse.Account__r.Business_Owner__c == currUserId) {
+            return true;
+        }
+        
+        if(warehouse.RecordType.Name=='Hospital' && warehouse.Hospital__c !=null){
+            List<Account_Hospital__c> ahList=[SELECT Account__r.Business_Owner__c, Hospital__c FROM Account_Hospital__c 
+                                              WHERE Hospital__c =:warehouse.Hospital__c AND Account__r.Business_Owner__c = :currUserId];
+            
+            return !ahList.isEmpty();
+        }
+        return false;
+    }
 }

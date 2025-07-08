@@ -3,9 +3,10 @@ import getWarehousesOptions from '@salesforce/apex/WarehouseInventoryController.
 import getInventoryData from '@salesforce/apex/WarehouseInventoryController.getInventoryData';
 import getWPLIs from '@salesforce/apex/WarehouseInventoryController.getWPLIs';
 import createReverseSupplyOrders from '@salesforce/apex/WarehouseInventoryController.createReverseSupplyOrders';
+import shouldRSObtnVisible from '@salesforce/apex/WarehouseInventoryController.shouldRSObtnVisible';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-
-export default class WarehouseInventory extends LightningElement {
+import { NavigationMixin } from 'lightning/navigation';
+export default class WarehouseInventory extends NavigationMixin(LightningElement) {
     @track warehouseOptions = [];
     @track selectedWarehouseId;
     @track tableData = [];
@@ -19,12 +20,14 @@ export default class WarehouseInventory extends LightningElement {
     @track isLoading = false;
     @track selectedStatus = 'Free';
     @track emptyArray = [];
-    @track reverseSOTableData=[];
-
+    @track reverseSOTableData = [];
+    showReverseSOBtn = false;
+    @track wpliData = [];
 
     connectedCallback() {
         getWarehousesOptions()
             .then(result => {
+                console.log('Warehousese:',result);
                 this.warehouseOptions = result.map(w => ({
                     label: w.Name,
                     value: w.Id
@@ -74,18 +77,23 @@ export default class WarehouseInventory extends LightningElement {
                 day: '2-digit'
             }
         },
+        { label: 'Status', fieldName: 'Status__c', type: 'text' },
         { label: 'Condition', fieldName: 'Condition__c', type: 'text' }
     ];
 
     statusOptions = [
         { label: 'Free', value: 'Free' },
         { label: 'Committed', value: 'Committed' },
-        { label: 'In Transit', value: 'In Transit' }
+        { label: 'In Transit', value: 'In Transit' },
+        { label: 'Consumed', value: 'Consumed' },
+        { label: 'Delivered', value: 'Delivered' },
+        { label: 'Material Returned', value: 'Material Returned' }
     ];
 
     handleWarehouseChange(event) {
         this.selectedWarehouseId = event.detail.value;
         this.isWarehouseSelected = true;
+        this.checkVisibility();
         this.fetchInventory();
     }
 
@@ -119,27 +127,27 @@ export default class WarehouseInventory extends LightningElement {
     ];
 
     handleConditionChange(event) {
-        console.log('WPLI Data before filter:', this.wpliData);      
-        
+        console.log('Selected wpliData:', this.wpliData);
         this.selectedCondition = event.detail.value;
         this.isLoading = true;
-        if(this.selectedCondition === 'All'){
+        if (this.selectedCondition === 'All') {
             this.reverseSOTableData = this.wpliData;
-            this.isLoading = false;
-            return;
-        }
-        if (this.wpliData && this.wpliData.length > 0) {
+        } else if (this.wpliData && this.wpliData.length > 0) {
             this.reverseSOTableData = this.wpliData.filter(row => row.Condition__c === this.selectedCondition);
-            this.isLoading = false;
-        }     
+        } else {
+            this.reverseSOTableData = [];
+        }
+        this.isLoading = false;
     }
     handleReverseClick() {
         this.showReverseTable = true;
         this.isLoading = true;
 
+        console.log('Selected warehouseId:', this.selectedWarehouseId);
         getWPLIs({ warehouseId: this.selectedWarehouseId })
             .then(result => {
                 if (result) {
+                    console.log('Result:', result);
                     this.wpliData = result.map(row => ({
                         ...row,
                         ProductName: row.Warehouse__r?.Zydus_Product__r?.Name || ''
@@ -173,10 +181,10 @@ export default class WarehouseInventory extends LightningElement {
     }
 
     handleProceed() {
-        this.isLoading=true;
+        this.isLoading = true;
         createReverseSupplyOrders({ selectedWpliIds: this.selectedRows.map(r => r.Id) })
-            .then(() => {
-                this.showReverseTable = false;
+            .then((rsoId) => {
+
                 this.dispatchEvent(
                     new ShowToastEvent({
                         title: 'Success',
@@ -184,11 +192,19 @@ export default class WarehouseInventory extends LightningElement {
                         variant: 'success'
                     })
                 );
-                this.isLoading=false;
+                this.isLoading = false;
+                this.showReverseTable = false;
 
+                this[NavigationMixin.Navigate]({
+                    type: 'standard__recordPage',
+                    attributes: {
+                        recordId: rsoId,
+                        actionName: 'view'
+                    }
+                });
             })
             .catch(error => {
-                this.isLoading=false;
+                this.isLoading = false;
                 console.error(error);
                 this.dispatchEvent(
                     new ShowToastEvent({
@@ -197,6 +213,17 @@ export default class WarehouseInventory extends LightningElement {
                         variant: 'error'
                     })
                 );
+            });
+    }
+
+    checkVisibility() {
+        if (!this.selectedWarehouseId) return;
+        shouldRSObtnVisible({ warehouseId: this.selectedWarehouseId })
+            .then(result => {
+                this.showReverseSOBtn = result;
+            })
+            .catch(error => {
+                this.showReverseSOBtn = false;
             });
     }
 }

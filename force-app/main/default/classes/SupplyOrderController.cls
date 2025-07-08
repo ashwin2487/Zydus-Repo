@@ -269,6 +269,8 @@ public with sharing class SupplyOrderController {
             Name,
             Warehouse__r.Zydus_Product__r.Name,
             Warehouse__r.Zydus_Product__c,
+            Warehouse__r.Zydus_Product__r.HSN_Code__r.Name,
+            Connected_Warehouse__c,
             Connected_Warehouse__r.Name,
             Serial_Number__c,
             Batch_Number__c,
@@ -282,6 +284,7 @@ public with sharing class SupplyOrderController {
             WHERE Connected_Warehouse__c IN :warehouseIds AND Status__c='Free' AND Condition__c='Good'
         ];
     }
+    
     @AuraEnabled(cacheable=true)
     public static List<Zydus_Product__c> getProductForConsignee(String consigneeId) {
         try {
@@ -321,13 +324,11 @@ public with sharing class SupplyOrderController {
         Id consignorId,
         String warehouseItemsJson 
     ) {
-        // Deserialize JSON
         List<SupplyOrderLineItemDTO> warehouseItems = (List<SupplyOrderLineItemDTO>)
             JSON.deserialize(warehouseItemsJson, List<SupplyOrderLineItemDTO>.class);
         
         System.debug('warehouseItems: ' + warehouseItems);
         
-        // Fetch consignee and consignor accounts to get states
         Map<Id, Account> accountsMap = new Map<Id, Account>([
             SELECT Id, State__c FROM Account WHERE Id IN :new Set<Id>{consigneeId, consignorId}
         ]);
@@ -335,7 +336,6 @@ public with sharing class SupplyOrderController {
         String supplierState = accountsMap.get(consignorId).State__c;
         String supplyType = buyerState == supplierState ? 'Intra-State' : 'Inter-State';
         
-        // Create Supply Order
         Supply_Order__c so = new Supply_Order__c();
         so.Name = latestSOName(consignorId);
         so.Consignee_Distributor__c = consigneeId;
@@ -344,7 +344,6 @@ public with sharing class SupplyOrderController {
         so.is_without_PO__c = true;
         insert so;
         
-        // Gather required Zydus Products
         Set<String> zydusProductIds = new Set<String>();
         for (SupplyOrderLineItemDTO item : warehouseItems) {
             if (!String.isBlank(item.zydusProductId)) {
@@ -352,7 +351,6 @@ public with sharing class SupplyOrderController {
             }
         }
         
-        // Insert SO Products
         List<SO_Product__c> soProducts = new List<SO_Product__c>();
         for (String zpId : zydusProductIds) {
             soProducts.add(new SO_Product__c(
@@ -362,12 +360,26 @@ public with sharing class SupplyOrderController {
         }
         insert soProducts;
         
+        Id priceBookId = [SELECT Id, Zydus_Price_Book__c FROM Account WHERE Id = :consigneeId].Zydus_Price_Book__c;
+        Map<Id, Id> zydusPriceBookEntryMap = new Map<Id, Id>();
+        
+        for (Zydus_Price_Book_Entry__c pbEntry : [
+            SELECT Id, Zydus_Product__c, Unit_Price__c
+            FROM Zydus_Price_Book_Entry__c
+            WHERE Zydus_Price_Book__c = :priceBookId
+        ]) {
+            zydusPriceBookEntryMap.put(pbEntry.Zydus_Product__c, pbEntry.Id);
+        }
+        
+        Map<Id, Zydus_Price_Book_Entry__c> priceBookEntryMap = new Map<Id, Zydus_Price_Book_Entry__c>(
+            [SELECT Id, Unit_Price__c FROM Zydus_Price_Book_Entry__c WHERE Id IN :zydusPriceBookEntryMap.values()]
+        );
+        
         Map<String, SO_Product__c> zydusToSoProductMap = new Map<String, SO_Product__c>();
         for (SO_Product__c sp : soProducts) {
             zydusToSoProductMap.put(sp.Zydus_Product__c, sp);
         }
         
-        // Fetch HSN Code for Zydus Products
         Map<Id, Zydus_Product__c> zydusProductMap = new Map<Id, Zydus_Product__c>(
             [SELECT Id, HSN_Code__c FROM Zydus_Product__c WHERE Id IN :zydusProductIds]
         );
@@ -378,7 +390,6 @@ public with sharing class SupplyOrderController {
             }
         }
         
-        // Fetch HSN tax links
         Date today = Date.today();
         Map<String, HSN_Tax_Master_Link__c> taxRateMap = new Map<String, HSN_Tax_Master_Link__c>();
         for (HSN_Tax_Master_Link__c tax : [
@@ -396,21 +407,65 @@ public with sharing class SupplyOrderController {
             taxRateMap.put(key, tax);
         }
         
-        // Prepare Line Items
+        Set<Id> wpliIds = new Set<Id>();
+        for (SupplyOrderLineItemDTO item : warehouseItems) {
+            if (!String.isBlank(item.lineItemId)) {
+                wpliIds.add(item.lineItemId);
+            }
+        }
+        
+        Map<Id, Warehouse_Product_Line_Items__c> wpliMap = new Map<Id, Warehouse_Product_Line_Items__c>(
+            [SELECT Id, Status__c FROM Warehouse_Product_Line_Items__c WHERE Id IN :wpliIds]
+        );
+        
+        final String ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        Map<Id, Integer> productToSopNumber = new Map<Id, Integer>();
+        Map<Id, Integer> productToSuffix = new Map<Id, Integer>(); 
+        
         List<Supply_Order_Line_Item__c> lineItems = new List<Supply_Order_Line_Item__c>();
+        List<Warehouse_Product_Line_Items__c> wpliToUpdate = new List<Warehouse_Product_Line_Items__c>();
+        
         for (SupplyOrderLineItemDTO item : warehouseItems) {
             if (String.isBlank(item.zydusProductId)) continue;
+            
+            String orderNumber = so.Name.replace('SO-', '');
+            
+            Integer productCounter = 1;
+            
+            if (!productToSopNumber.containsKey(item.zydusProductId)) {
+                productToSopNumber.put(item.zydusProductId, productCounter);
+                productCounter++;
+            }
+            Integer sopNumber = productToSopNumber.get(item.zydusProductId);
+            
+            Integer suffixIndex = productToSuffix.containsKey(item.zydusProductId)
+                ? productToSuffix.get(item.zydusProductId)
+                : 1;
+            String baseSuffix = '';
+            Integer temp = suffixIndex;
+            while (temp > 0) {
+                Integer rem = Math.mod(temp - 1, 26);
+                baseSuffix = ALPHA.substring(rem, rem + 1) + baseSuffix;
+                temp = (temp - 1) / 26;
+            }
+            productToSuffix.put(item.zydusProductId, suffixIndex + 1);
+            
+            String soliName = 'SOP' + sopNumber + '/' + orderNumber + '/' + baseSuffix;
             
             SO_Product__c soProduct = zydusToSoProductMap.get(item.zydusProductId);
             if (soProduct == null) {
                 throw new AuraHandledException('No SO Product found for Zydus Product Id: ' + item.zydusProductId);
             }
             
-            Decimal unitPrice = String.isBlank(item.unitPrice) ? 0 : Decimal.valueOf(item.unitPrice);
-            Decimal quantity = 1; // Default to 1 or add quantity field in DTO if available
+            Decimal unitPrice = 0;
+            Zydus_Price_Book_Entry__c entry = priceBookEntryMap.get(zydusPriceBookEntryMap.get(item.zydusProductId));
+            if (entry != null) {
+                unitPrice = entry.Unit_Price__c != null ? entry.Unit_Price__c : 0;
+            }
+            
+            Decimal quantity = 1; 
             Decimal taxableValue = unitPrice * quantity;
             
-            // Tax logic
             Zydus_Product__c zp = zydusProductMap.get(item.zydusProductId);
             Decimal cgst = 0, sgst = 0, igst = 0;
             if (zp != null && zp.HSN_Code__c != null) {
@@ -426,11 +481,11 @@ public with sharing class SupplyOrderController {
                     }
                 }
             }
+            Decimal netAmount = unitPrice + cgst + sgst + igst;
             
-            // Build line item
             Supply_Order_Line_Item__c lineItem = new Supply_Order_Line_Item__c();
             lineItem.Supply_Order__c = so.Id;
-            lineItem.Name = item.name;
+            lineItem.Name = soliName;
             lineItem.Serial_Number__c = item.serialNumber;
             lineItem.Batch_Number__c = item.batchNumber;
             
@@ -441,6 +496,7 @@ public with sharing class SupplyOrderController {
                 lineItem.Manufacturing_Date__c = Date.valueOf(item.manufacturedDate);
             }
             
+            lineItem.Warehouse__c = item.warehouseId;
             lineItem.Warehouse_Product_Line_Item__c = item.lineItemId;
             lineItem.Zydus_Product__c = item.zydusProductId;
             lineItem.SO_Product__c = soProduct.Id;
@@ -448,11 +504,31 @@ public with sharing class SupplyOrderController {
             lineItem.CGST__c = cgst;
             lineItem.SGST__c = sgst;
             lineItem.IGST__c = igst;
+            lineItem.Net_Amount__c = netAmount;
+            lineItem.HSN_Code__c = item.hsnCode;
+            lineItem.Zydus_Price_Book_Entry__c = entry.Id;
             
             lineItems.add(lineItem);
         }
         
         insert lineItems;
+        for (Integer i = 0; i < lineItems.size(); i++) {
+            Supply_Order_Line_Item__c lineItem = lineItems[i];
+            Id wpliId = lineItem.Warehouse_Product_Line_Item__c;
+            
+            if (wpliId != null && wpliMap.containsKey(wpliId)) {
+                Warehouse_Product_Line_Items__c wpli = wpliMap.get(wpliId);
+                wpli.Status__c = 'Committed';
+                wpli.Supply_Order_Line_Item__c = lineItem.Id;
+                wpliToUpdate.add(wpli);
+            }
+        }
+        
+        // Update all WPLI records
+        if (!wpliToUpdate.isEmpty()) {
+            update wpliToUpdate;
+        }
+        
         return so.Id;
     }
     
@@ -465,6 +541,7 @@ public with sharing class SupplyOrderController {
         public String expiryDate;
         public String lineItemId;
         public String zydusProductId;
+        public String hsnCode;
         public String taxMaster;
         public String unitPrice;
     }

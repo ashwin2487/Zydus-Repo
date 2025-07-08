@@ -1,4 +1,4 @@
-public class DistributorOnboardingController {
+public without sharing class DistributorOnboardingController {
 
     @AuraEnabled
     public static String submitDistributorForApproval(String onboardingData) {

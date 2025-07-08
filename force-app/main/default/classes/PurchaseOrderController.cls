@@ -1,4 +1,4 @@
-public class PurchaseOrderController {
+public without sharing class PurchaseOrderController {
     
     @AuraEnabled(cacheable=true)
     public static PurchaseOrderWrapper getPurchaseOrderDetails(Id recordId) {
@@ -52,7 +52,7 @@ public class PurchaseOrderController {
              IGST__c,
              CGST__c,
              SGST__c,
-             	Purchase_Order_Amount__c,
+             Purchase_Order_Amount__c,
              Zydus_Product__r.Name,
              Zydus_Product__r.Diameter__c,
              Zydus_Product__r.Length__c
@@ -226,7 +226,6 @@ public class PurchaseOrderController {
         public String accountId;
         public List<ProductInput> selectedProducts;
     }
-    
     @AuraEnabled
     public static Id createManualPurchaseOrder(String payload) {
         ID userId = UserInfo.getUserId();
@@ -254,14 +253,25 @@ public class PurchaseOrderController {
                 throw new AuraHandledException('Missing required Purchase Order data.');
             }
         
-        Account curAcc = [SELECT Id, Business_Owner__c, State__c, Parent.State__c FROM Account WHERE Id = :request.accountId];
+        // Access check
+        Account curAcc = [
+            SELECT Id, Business_Owner__c, State__c, ParentId
+            FROM Account
+            WHERE Id = :request.accountId
+        ];
         
         if (currentUser.Id != curAcc.Business_Owner__c) {
             throw new AuraHandledException('Access Denied: Only the designated Business Owner is authorized to create a Purchase Order.');
         }
         
+        // Get parent account's state using without sharing utility class
+        String supplierState = null;
+        if (curAcc.ParentId != null) {
+            Account parentAcc = AccountAccessUtil.getParentBusinessOwner(curAcc.ParentId);
+            supplierState = parentAcc != null ? parentAcc.State__c : null;
+        }
+        
         String buyerState = curAcc.State__c;
-        String supplierState = curAcc.Parent != null ? curAcc.Parent.State__c : null;
         String supplyType = (buyerState == supplierState) ? 'Intra-State' : 'Inter-State';
         
         Set<Id> productIds = new Set<Id>();
@@ -355,6 +365,7 @@ public class PurchaseOrderController {
         return po.Id;
     }
     
+    
     @AuraEnabled
     public static void addProductsToPO(String payload) {
         ID userId = UserInfo.getUserId();
@@ -372,18 +383,38 @@ public class PurchaseOrderController {
         
         AddProductsRequest request = (AddProductsRequest) JSON.deserialize(payload, AddProductsRequest.class);
         
-        Account curAcc = [SELECT Id, Business_Owner__c, State__c, Parent.State__c FROM Account WHERE Id = :request.accountId];
+        Account curAcc = [
+            SELECT Id, Business_Owner__c, State__c, ParentId
+            FROM Account
+            WHERE Id = :request.accountId
+        ];
         
+        // Check access
         if (currentUser.Id != curAcc.Business_Owner__c) {
             throw new AuraHandledException('Access Denied: Only the designated Business Owner is authorized to Edit a Purchase Order.');
         }
         
-        Purchase_Order__c PO = [SELECT Id, StageName__c FROM Purchase_Order__c WHERE Id = :request.poId];
+        Purchase_Order__c PO = [
+            SELECT Id, StageName__c
+            FROM Purchase_Order__c
+            WHERE Id = :request.poId
+        ];
         
         if (PO.StageName__c != 'Draft Purchase Order') {
             throw new AuraHandledException('Purchase Order cannot be edited after it has been approved.');
         }
         
+        // Fetch parent account state using the without sharing util class
+        String supplierState = null;
+        if (curAcc.ParentId != null) {
+            Account parentAcc = AccountAccessUtil.getParentBusinessOwner(curAcc.ParentId);
+            supplierState = parentAcc != null ? parentAcc.State__c : null;
+        }
+        
+        String buyerState = curAcc.State__c;
+        String supplyType = (buyerState == supplierState) ? 'Intra-State' : 'Inter-State';
+        
+        // Query existing products on PO
         List<Purchase_Order_Product__c> existingProducts = [
             SELECT Id, Zydus_Product__c
             FROM Purchase_Order_Product__c
@@ -397,6 +428,7 @@ public class PurchaseOrderController {
             }
         }
         
+        // Prepare product and HSN code data
         Set<Id> productIds = new Set<Id>();
         for (ProductInput prod : request.selectedProducts) {
             if (!String.isBlank(prod.productId)) {
@@ -417,10 +449,7 @@ public class PurchaseOrderController {
             }
         }
         
-        String buyerState = curAcc.State__c;
-        String supplierState = curAcc.Parent != null ? curAcc.Parent.State__c : null;
-        String supplyType = (buyerState == supplierState) ? 'Intra-State' : 'Inter-State';
-        
+        // Tax lookup
         Date today = Date.today();
         Map<String, HSN_Tax_Master_Link__c> taxRateMap = new Map<String, HSN_Tax_Master_Link__c>();
         for (HSN_Tax_Master_Link__c tax : [
@@ -496,6 +525,7 @@ public class PurchaseOrderController {
         if (!productsToInsert.isEmpty()) insert productsToInsert;
         if (!productsToUpdate.isEmpty()) update productsToUpdate;
     }
+    
     @AuraEnabled
     public static void manualPOClosure(Id recordId, String reason) {
         Id userId = UserInfo.getUserId();

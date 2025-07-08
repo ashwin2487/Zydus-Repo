@@ -7,13 +7,13 @@
                     onchange={handleWarehouseOptionsChange} class="slds-m-bottom_small">
                 </lightning-combobox>
             </div>
-            
-            <template if:true={data.length}>
-                <div class="slds-grid slds-grid_align-end slds-m-bottom_medium">
+                 <div class="slds-grid slds-grid_align-end slds-m-bottom_medium">
                 <lightning-combobox label="Filter by Status" value={selectedStatus} options={statusOptions}
                     onchange={handleStatusOptionsChange} class="slds-m-bottom_small">
                 </lightning-combobox>
             </div>
+            <template if:true={data.length}>
+           
                 <lightning-datatable key-field="productName" data={data} columns={columns}  column-widths-mode="auto" hide-checkbox-column="true">
                 </lightning-datatable>
             </template>

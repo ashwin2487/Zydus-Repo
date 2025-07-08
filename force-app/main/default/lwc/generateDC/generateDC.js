@@ -2,8 +2,9 @@ import { LightningElement, api } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import createDeliveryChallan from '@salesforce/apex/GenerateDeliveryChallan.createDeliveryChallan';
 import { CloseActionScreenEvent } from 'lightning/actions';
+import { NavigationMixin } from 'lightning/navigation';
 
-export default class GenerateDC extends LightningElement {
+export default class GenerateDC extends NavigationMixin(LightningElement) {
     @api recordId;
 
     createDC() {
@@ -27,10 +28,20 @@ export default class GenerateDC extends LightningElement {
                 this.dispatchEvent(
                     new ShowToastEvent({
                         title: isAlreadyCreated ? 'Alert' : 'Success',
-                        message: result,
+                        message: isAlreadyCreated? result : 'Delivery Challan created successfully!',
                         variant: isAlreadyCreated ? 'warning' : 'success'
                     })
                 );
+
+                this[NavigationMixin.Navigate]({
+                    type: 'standard__recordPage',
+                    attributes: {
+                        recordId: result,
+                        objectApiName: 'Delivery_Challan__c',
+                        actionName: 'view'
+                    }
+                });
+
             }).catch(error => {
                 this.dispatchEvent(
                     new ShowToastEvent({

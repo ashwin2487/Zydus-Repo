@@ -41,10 +41,13 @@
             <!-- Product Table -->
             <template if:true={showWarehouseLineItemTable}>
                 <div class="slds-p-bottom_medium slds-p-top_medium">Available Products</div>
-                <div style="height: 350px; overflow: auto;">
+                <div style="max-height: 350px; overflow: auto;">
                     <lightning-datatable key-field="Id" data={sortedData} columns={columns} onsort={handleSort}
                         sorted-by={sortBy} sorted-direction={sortDirection} onrowselection={handleRowSelection}>
                     </lightning-datatable>
+                    <template if:false={sortedData.length}>
+                        <p class="slds-align_absolute-center slds-text-heading_small slds-p-around_medium">No products available.</p>
+                    </template>
                 </div>
             </template>
 

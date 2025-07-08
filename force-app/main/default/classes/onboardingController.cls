@@ -1,4 +1,4 @@
-public with sharing class onboardingController {
+public without sharing class onboardingController {
     
     private static Map<String, Id> recordTypeMap;
     
@@ -64,7 +64,7 @@ public with sharing class onboardingController {
         Account userAccount = userAccounts[0];
         String role = userAccount.Distributor_Type__c;
         result.put('role', role);
-        
+        set<Id> distributorIds = new Set<id>();
         if (role == 'Super Distributor') {
             result.put('superDistributor', userAccount);
             
@@ -73,7 +73,12 @@ public with sharing class onboardingController {
                 SELECT Id, Name FROM Account
                 WHERE ParentId = :userAccount.Id AND Distributor_Type__c = 'Distributor'
             ];
+            for(Account curAcc : distributors){
+                distributorIds.add(curAcc.id);
+            }
             result.put('distributorOptions', buildSelectOptions(distributors));
+            List<Account> subDistributors = [ select Id , Name from Account where ParentId IN : distributorIds AND Distributor_Type__c = 'Sub Distributor'];
+            result.put('subDistributorOptions',buildSelectOptions(subDistributors));
             
         } else if (role == 'Distributor') {
             result.put('distributor', userAccount);
@@ -91,18 +96,14 @@ public with sharing class onboardingController {
         } else if (role == 'Sub Distributor') {
             result.put('subDistributor', userAccount);
             if (userAccount.ParentId != null) {
-                Account distributor = [
-                    SELECT Id, Name, ParentId, Parent.Name FROM Account
-                    WHERE Id = :userAccount.ParentId
-                    LIMIT 1
-                ];
+                Account distributor = [SELECT Id, Name, ParentId, Parent.Name FROM Account WHERE Id = :userAccount.ParentId LIMIT 1];
                 result.put('distributor', distributor);
                 if (distributor.ParentId != null) {
                     result.put('superDistributor', distributor.Parent);
                 }
             }
         }
-        
+        system.debug('result is '+result);
         return result;
     }
     

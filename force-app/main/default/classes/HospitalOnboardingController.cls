@@ -1,4 +1,4 @@
-public class HospitalOnboardingController{
+public without sharing class HospitalOnboardingController{
     
     public class HospitalPayload {
         @AuraEnabled public String hospitalName;
@@ -54,12 +54,9 @@ public class HospitalOnboardingController{
             AND Hospital_Pin_Code__c = :payload.pin
         ];
         
-
-        if (!existingHosp.isEmpty()) {
         
-            // Create case for duplicate hospital resolution
+        if (!existingHosp.isEmpty()) {
             try {
-                // Get Zydus Account
                 List<Account> zydusAccount = [
                     SELECT Id, Name 
                     FROM Account 
@@ -70,8 +67,6 @@ public class HospitalOnboardingController{
                 ];
                 
                 if (!zydusAccount.isEmpty()) {
-                    
-                    // Create case
                     Case duplicateCase = new Case(
                         AccountId = zydusAccount[0].Id,
                         Subject = 'Duplicate Hospital Onboarding - GST: ' + payload.gstNumber + ', PIN: ' + payload.pin,
@@ -102,7 +97,7 @@ public class HospitalOnboardingController{
                 return 'Hospital already exists for the provided GST and PIN code!';
             }
         } 
-               
+        
         try {  
             Hospital__c hosp = new Hospital__c(
                 Name                      = payload.hospitalName,
@@ -111,7 +106,7 @@ public class HospitalOnboardingController{
                 Contact_Email__c		  = payload.email,
                 Contact_Phone__c		  = payload.mobile,
                 Registration_Number__c    = payload.hospRegistrationNumber,
-				Group__c 				  = String.isBlank(payload.hospGroup) ? null : payload.hospGroup,
+                Group__c 				  = String.isBlank(payload.hospGroup) ? null : payload.hospGroup,
                 Zydus_Price_Book__c		  = String.isBlank(payload.selectedPriceBook) ? null : payload.selectedPriceBook,
                 CC_Email_Address__c       = payload.ccEmail,
                 Address__c                = payload.billingAddress,
@@ -132,33 +127,21 @@ public class HospitalOnboardingController{
                 Invoice_Comment__c        = payload.invoiceComment,
                 Hospital_ID__c            = payload.hospitalId,
                 Phyzii_Hospital_ID__c     = payload.phyziiId,
-				Comment_Options__c        = payload.commentOptionSelected
+                Comment_Options__c        = payload.commentOptionSelected
             );
             insert hosp;
             
             List<Account_Hospital__c> junctions = new List<Account_Hospital__c>();
             if (String.isNotBlank(payload.selectedSuperDistributor)) {
-                junctions.add(new Account_Hospital__c(
-                    Account__c  = payload.selectedSuperDistributor,
-                    Hospital__c = hosp.Id
-                ));
+                junctions.add(new Account_Hospital__c(Account__c = payload.selectedSuperDistributor, Hospital__c = hosp.Id));
             }
             if (String.isNotBlank(payload.selectedDistributor)) {
-                junctions.add(new Account_Hospital__c(
-                    Account__c  = payload.selectedDistributor,
-                    Hospital__c = hosp.Id
-                ));
+                junctions.add(new Account_Hospital__c(Account__c = payload.selectedDistributor, Hospital__c = hosp.Id));
             }
             if (String.isNotBlank(payload.selectedSubDistributor)) {
-                junctions.add(new Account_Hospital__c(
-                    Account__c  = payload.selectedSubDistributor,
-                    Hospital__c = hosp.Id
-                ));
+                junctions.add(new Account_Hospital__c(Account__c = payload.selectedSubDistributor, Hospital__c = hosp.Id));
             }
-            if (!junctions.isEmpty()) {
-                insert junctions;
-            }
-            
+            if (!junctions.isEmpty()) insert junctions;                
             if (payload.selectedProducts != null && !payload.selectedProducts.isEmpty()) {
                 List<Hospital_Product__c> HPJunctions = new List<Hospital_Product__c>();
                 for (String prodId : payload.selectedProducts) {
