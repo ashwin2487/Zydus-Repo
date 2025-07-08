@@ -3,8 +3,9 @@ import getDeliveryChallanDetails from '@salesforce/apex/GRNController.getDeliver
 import processGRN from '@salesforce/apex/GRNController.processGRN';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { CloseActionScreenEvent } from 'lightning/actions';
+import { NavigationMixin } from 'lightning/navigation';
 
-export default class GrnProcess extends LightningElement {
+export default class GrnProcess extends NavigationMixin(LightningElement) {
   @api recordId;
 
   @track lineItems = [];
@@ -185,7 +186,7 @@ export default class GrnProcess extends LightningElement {
       challanId: this.recordId,
       lineItems: this.lineItems
     })
-      .then(() => {
+      .then((grnId) => {
         this.dispatchEvent(
           new ShowToastEvent({
             title: 'Success',
@@ -194,6 +195,15 @@ export default class GrnProcess extends LightningElement {
           })
         );
         this.dispatchEvent(new CloseActionScreenEvent());
+
+        this[NavigationMixin.Navigate]({
+          type: 'standard__recordPage',
+          attributes: {
+            recordId: grnId,
+            objectApiName:'Warehouse__c',
+            actionName: 'view'
+          }
+        });
       })
       .catch(error => {
         this.error = error.body?.message || error.message;

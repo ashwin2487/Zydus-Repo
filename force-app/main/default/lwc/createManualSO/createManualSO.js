@@ -1,13 +1,13 @@
 import { LightningElement, wire, api, track } from 'lwc';
 import { getRecord } from 'lightning/uiRecordApi';
 import getConsigneeDistributor from '@salesforce/apex/SupplyOrderController.getConsigneeDistributor';
-import latestSOName from '@salesforce/apex/SupplyOrderController.latestSOName';
 import getProductByPB from '@salesforce/apex/SupplyOrderController.getProductByPB';
 import getWarehouseLineItem from '@salesforce/apex/SupplyOrderController.getWarehouseLineItem';
 import getProductForConsignee from '@salesforce/apex/SupplyOrderController.getProductForConsignee';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import createSupplyOrderWithLineItems from '@salesforce/apex/SupplyOrderController.createSupplyOrderWithLineItems';
+import { CloseActionScreenEvent } from "lightning/actions";
 
 export default class CreateManualSO extends NavigationMixin(LightningElement) {
 
@@ -30,13 +30,13 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
     columns = [
         { label: 'Name', fieldName: 'Name', sortable: true, type: 'text', initialWidth: 100 },
         { label: 'Product Name', fieldName: 'ZydusProduct', type: 'text', sortable: true, initialWidth: 150 },
-        { label: 'Connected Warehouse', fieldName: 'WarehouseName', sortable: true, initialWidth: 250 },
+        { label: 'Warehouse', fieldName: 'WarehouseName', sortable: true, initialWidth: 250 },
         { label: 'Serial Number', fieldName: 'Serial_Number__c', sortable: true, initialWidth: 150 },
         { label: 'Batch Number', fieldName: 'Batch_Number__c', sortable: true, initialWidth: 150 },
+        { label: 'HSN Code', fieldName: 'hsnCode', sortable: true, initialWidth: 150 },
         { label: 'Status', fieldName: 'Status__c', sortable: true, initialWidth: 100 },
         { label: 'Condition', fieldName: 'Condition__c', sortable: true, initialWidth: 100 },
         { label: 'Expiry Date', fieldName: 'Expiry_Date__c', type: 'date', sortable: true, initialWidth: 150 },
-        { label: 'Is Expired?', fieldName: 'Is_Expired__c', type: 'boolean', sortable: true, initialWidth: 100 },
         { label: 'Manufactured Date', fieldName: 'Manufactured_Date__c', type: 'date', sortable: true, initialWidth: 150 },
         { label: 'Unit Price', fieldName: 'Unit_Price__c', type: 'currency', sortable: true, initialWidth: 100 }
     ];
@@ -89,7 +89,6 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
 
             getProductForConsignee({ consigneeId: this.consigneeDistributor })
                 .then(result => {
-                    console.log('RESULT:', result);
                     if (result && Array.isArray(result)) {
                         this.consigneeDistributorProductIds = result.map(product => product.Id);
                     } else {
@@ -117,7 +116,6 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
     get showWarehouseLineItemTable() {
         return !!this.consigneeDistributor;
     }
-
 
     @wire(getConsigneeDistributor, { Id: '$recordId' })
     wiredConsigneeDistributor({ error, data }) {
@@ -150,8 +148,6 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
             }
         });
 
-        console.log('unavailableProducts: ', unavailableProducts);
-
         if (unavailableProducts.length > 0) {
             const names = unavailableProducts.map(p => `${p.productName} (${p.serialNumber})`).join(', ');
             this.showToast('Unavailable Products', `These products are not available for this consignee: ${names}`, 'error');
@@ -168,13 +164,20 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
 
     removeSelectedProduct(event) {
         const productIdToRemove = event.currentTarget.dataset.id;
+
+        const removedProduct = this.validSelectedProducts.find(p => p.Id === productIdToRemove);
+
         this.validSelectedProducts = this.validSelectedProducts.filter(p => p.Id !== productIdToRemove);
+
+        if (removedProduct) {
+            this.sortedData = [...this.sortedData, removedProduct];
+        }
     }
+
 
     get disableAddProductBtn() {
         return this.selectedRows.length === 0;
     }
-
 
     @track warehouseLineItems = [];
 
@@ -184,7 +187,8 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
             this.warehouseLineItems = data.map(item => ({
                 ...item,
                 ZydusProduct: item.Warehouse__r?.Zydus_Product__r.Name || '',
-                WarehouseName: item.Connected_Warehouse__r.Name || 'N/A'
+                WarehouseName: item.Connected_Warehouse__r.Name || 'N/A',
+                hsnCode: item.Warehouse__r?.Zydus_Product__r.HSN_Code__r.Name || 'N/A',
             }));
             this.sortedData = [...this.warehouseLineItems];
         } else if (error) {
@@ -235,26 +239,29 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
 
         const dtoList = this.validSelectedProducts.map(item => ({
             name: item.Name,
-            warehouseId: item.Warehouse__c,
+            hsnCode: item.Warehouse__r?.Zydus_Product__r?.HSN_Code__c || '',
+            warehouseId: item.Connectec_Warehouse__c,
             serialNumber: item.Serial_Number__c,
             batchNumber: item.Batch_Number__c,
             manufacturedDate: item.Manufactured_Date__c,
             expiryDate: item.Expiry_Date__c,
             lineItemId: item.Id,
-            unitPrice: item.Unit_Price__c || 0,            
-            taxMaster:item.Warehouse__r.Zydus_Product__r.Tax_Master__c || null,
+            unitPrice: item.Unit_Price__c || 0,
+            taxMaster: item.Warehouse__r.Zydus_Product__r.Tax_Master__c || null,
             zydusProductId: item.Warehouse__r?.Zydus_Product__c || null
         }));
 
-        console.log('dtoList: ',dtoList);
+        console.log('dtoList: ', dtoList);
         createSupplyOrderWithLineItems({
             consigneeId: this.consigneeDistributor,
             consignorId: this.recordId,
-            warehouseItemsJson:JSON.stringify(dtoList)
+            warehouseItemsJson: JSON.stringify(dtoList)
         })
             .then(soId => {
+                console.log('soId: ', soId);
                 this.showToast('Success', 'Supply Order created successfully', 'success');
-                // Navigate or reset component
+                this.dispatchEvent(new CloseActionScreenEvent());
+
                 this[NavigationMixin.Navigate]({
                     type: 'standard__recordPage',
                     attributes: {
@@ -266,6 +273,7 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
 
             })
             .catch(error => {
+                this.showToast('Error', error?.body?.message || error?.message, 'error');
             })
 
     }

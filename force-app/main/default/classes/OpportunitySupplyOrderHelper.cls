@@ -358,10 +358,8 @@ public with sharing class OpportunitySupplyOrderHelper {
         
         return dtoList;
     }
-    
-    
     @AuraEnabled
-    public static void createSupplyOrderFromOpportunity(Id purchaseOrderId, String linesJson) {
+    public static Id createSupplyOrderFromOpportunity(Id purchaseOrderId, String linesJson) {
         if (purchaseOrderId == null) {
             throw new AuraHandledException('Purchase Order Id is required.');
         }
@@ -433,6 +431,16 @@ public with sharing class OpportunitySupplyOrderHelper {
             so = buildSupplyOrder(po, isARS, isHospitalOrder);
             insert so;
             
+            if (so != null && po.Supplier_Distributor__c != null && po.Account__c != null) {
+                List<Id> recordIdsToShare = new List<Id>{ so.Id };
+                    Set<Id> userIdsToShareWith = new Set<Id>{
+                        po.Supplier_Distributor__c,
+                            po.Account__c
+                            };
+                                
+                                RecordSharingUtilityBulk.shareRecords(recordIdsToShare, userIdsToShareWith);
+            }
+            
             so = [
                 SELECT Id, Name, New_Purchase_Order__c, SO_Generated_Date__c, is_ARS_SO__c,
                 Consignee_Distributor__r.Business_Owner__c, 
@@ -441,7 +449,8 @@ public with sharing class OpportunitySupplyOrderHelper {
                 Consignor_Distributor__r.Business_Owner__c,
                 Consignor_Distributor__r.Business_Owner__r.Email, 
                 Consignor_Distributor__r.Business_Owner__r.Name,
-                New_Purchase_Order__r.Name
+                New_Purchase_Order__r.Name,
+                Consignee_Hospital__c
                 FROM Supply_Order__c
                 WHERE Id = :so.Id
             ];
@@ -454,6 +463,16 @@ public with sharing class OpportunitySupplyOrderHelper {
             
             so = buildSupplyOrder(po, isARS, isHospitalOrder);
             insert so;
+            if (so != null && parentAccount.Business_owner__c != null) {
+                List<Id> recordIdsToShare = new List<Id> { so.Id };
+                    Set<Id> userIds = new Set<Id> {parentAccount.Business_owner__c};
+                        if (isHospitalOrder) {
+                        } else if (po.Account__r.Business_Owner__c != null) {
+                            userIds.add(po.Account__r.Business_Owner__c);
+                        }
+                
+                RecordSharingUtilityBulk.shareRecords(recordIdsToShare, userIds);
+            }
             
             so = [
                 SELECT Id, Name, New_Purchase_Order__c, SO_Generated_Date__c, is_ARS_SO__c,
@@ -463,7 +482,8 @@ public with sharing class OpportunitySupplyOrderHelper {
                 Consignor_Distributor__r.Business_Owner__c,
                 Consignor_Distributor__r.Business_Owner__r.Email, 
                 Consignor_Distributor__r.Business_Owner__r.Name,
-                New_Purchase_Order__r.Name
+                New_Purchase_Order__r.Name,
+                Consignee_Hospital__c
                 FROM Supply_Order__c
                 WHERE Id = :so.Id
             ];
@@ -472,7 +492,9 @@ public with sharing class OpportunitySupplyOrderHelper {
             createSupplyOrderLineItems(so, lines, null);
             sendSupplyOrderNotification(so);
         }
+        return so.Id;
     }
+    
     
     private static Supply_Order__c buildSupplyOrder(Purchase_Order__c po, Boolean isARS, Boolean isHospitalOrder) {
         Supply_Order__c so = new Supply_Order__c(
@@ -484,18 +506,21 @@ public with sharing class OpportunitySupplyOrderHelper {
             OwnerId = po.Account__r.Business_Owner__c
         );
         
-        
-        
-        
         if (isHospitalOrder) {
-            Hospital__c curHospital = [select Id , Comment_Options__c, Invoice_Comment__c from Hospital__c where Id =: po.Hospital__c ];
-            if(curHospital.Comment_Options__c != null && curHospital.Comment_Options__c.contains('SOL')){
-                if(curHospital.Invoice_Comment__c != null){
+            so.Consignee_Hospital__c = po.Hospital__c;
+            Hospital__c curHospital = [
+                SELECT Id, Comment_Options__c, Invoice_Comment__c 
+                FROM Hospital__c 
+                WHERE Id = :po.Hospital__c 
+                LIMIT 1
+            ];
+            
+            if (curHospital.Comment_Options__c != null && 
+                curHospital.Comment_Options__c.contains('SOL') && 
+                curHospital.Invoice_Comment__c != null) {
                     so.Comment__c = curHospital.Invoice_Comment__c;
                 }
-                so.Consignee_Hospital__c = po.Hospital__c;
-            } 
-        }else {
+        } else {
             so.Consignee_Distributor__c = po.Account__c;
         }
         
@@ -514,16 +539,22 @@ public with sharing class OpportunitySupplyOrderHelper {
         Set<String> userIds = new Set<String>();
         List<String> emailAddresses = new List<String>();
         
-        if (so.Consignee_Distributor__r.Business_Owner__c != null) {
+        // Consignee Business Owner
+        if (so.Consignee_Distributor__r != null && so.Consignee_Distributor__r.Business_Owner__c != null) {
             userIds.add(so.Consignee_Distributor__r.Business_Owner__c);
             if (so.Consignee_Distributor__r.Business_Owner__r.Email != null) {
                 emailAddresses.add(so.Consignee_Distributor__r.Business_Owner__r.Email);
             }
         }
-        if (so.Consignor_Distributor__r.Business_Owner__c != null) {
-            userIds.add(so.Consignor_Distributor__r.Business_Owner__c);
-            if (so.Consignor_Distributor__r.Business_Owner__r.Email != null) {
-                emailAddresses.add(so.Consignor_Distributor__r.Business_Owner__r.Email);
+        
+        // Consignor (Parent Account logic)
+        if (so.Consignor_Distributor__c != null) {
+            Account parentAccount = AccountAccessUtil.getParentBusinessOwner(so.Consignor_Distributor__c);
+            if (parentAccount != null && parentAccount.Business_Owner__c != null) {
+                userIds.add(parentAccount.Business_Owner__c);
+                if (parentAccount.Business_Owner__r.Email != null) {
+                    emailAddresses.add(parentAccount.Business_Owner__r.Email);
+                }
             }
         }
         
@@ -531,10 +562,12 @@ public with sharing class OpportunitySupplyOrderHelper {
         String body = 'Dear User,\n\n'
             + 'A new Supply Order "' + so.Name + '" has been successfully created.\n\n'
             + 'Details:\n'
-            + '- Created By: ' + so.Consignor_Distributor__r.Business_Owner__r.Name + '\n'
-            + '- Against Purchase Order: ' + so.New_Purchase_Order__r.Name + '\n\n'
+            + '- Created By: ' + (so.Consignor_Distributor__r != null && so.Consignor_Distributor__r.Business_Owner__r != null 
+                                  ? so.Consignor_Distributor__r.Business_Owner__r.Name 
+                                  : 'System') + '\n'
+            + '- Against Purchase Order: ' + (so.New_Purchase_Order__r != null ? so.New_Purchase_Order__r.Name : 'N/A') + '\n\n'
             + 'You may now proceed with the necessary actions.\n\n'
-            + 'Best regards,\n Zydus DMS';
+            + 'Best regards,\nZydus DMS';
         
         NotificationService.notifyUsers(userIds, so.Id, subject, body);
         
@@ -542,6 +575,7 @@ public with sharing class OpportunitySupplyOrderHelper {
             NotificationService.sendEmail(emailAddresses, subject, body);
         }
     }
+    
     
     public static void createSupplyOrderLineItems(Supply_Order__c so, List<SupplyOrderLineInputDTO> lines, Primary_DC__c primaryDC) {
         final String ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -610,6 +644,7 @@ public with sharing class OpportunitySupplyOrderHelper {
             ));
         }
         insert soProductsToInsert;
+        
         for (SO_Product__c sop : soProductsToInsert) {
             productToSOProduct.put(sop.Zydus_Product__c, sop);
         }
@@ -772,7 +807,7 @@ public with sharing class OpportunitySupplyOrderHelper {
         List<Purchase_Order_Product__c> popToUpdate = [
             SELECT Id, Pending_Quantity__c, Zydus_Product__c, Quantity__c, SO_Status__c, Purchase_Order__c
             FROM Purchase_Order_Product__c
-            WHERE Zydus_Product__c IN :productIds
+            WHERE Zydus_Product__c IN :productIds AND Purchase_Order__c =: so.New_Purchase_Order__c
         ];
         
         List<Purchase_Order_Product__c> popsToStatusUpdate = new List<Purchase_Order_Product__c>();

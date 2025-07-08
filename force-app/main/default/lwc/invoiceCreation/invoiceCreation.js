@@ -15,7 +15,8 @@ import getChannelPartnerLineItems from '@salesforce/apex/InvoiceCreationControll
 import saveInvoiceCP from '@salesforce/apex/InvoiceCreationController.saveInvoiceCP';
 import getPaymentModePicklistValues from '@salesforce/apex/InvoiceCreationController.getPaymentModePicklistValues';
 import existingCATHNumber from '@salesforce/apex/InvoiceCreationController.existingCATHNumber';
-export default class InvoiceCreation extends LightningElement {
+import { NavigationMixin } from 'lightning/navigation';
+export default class InvoiceCreation extends NavigationMixin(LightningElement) {
     @track accountOptions = [];
     @track deliveryChallanOptions = [];
     @track hospitalOptions = [];
@@ -407,13 +408,21 @@ export default class InvoiceCreation extends LightningElement {
         console.log('invoiceData', invoiceData);
 
         saveInvoice({ invoiceData: JSON.stringify(invoiceData) })
-            .then(() => {
+            .then((result) => {
                 this.dispatchEvent(new ShowToastEvent({
                     title: 'Success',
                     message: 'Invoice saved successfully',
                     variant: 'success'
                 }));
                 this.isHospitalMode = false;
+                 this[NavigationMixin.Navigate]({
+                    type: 'standard__recordPage',
+                    attributes: {
+                        recordId: result,
+                        objectApiName: 'Invoice__c',
+                        actionName: 'view'
+                    }
+                });
             })
             .catch(error => {
                 console.error('Error saving invoice:', error);
@@ -580,6 +589,7 @@ export default class InvoiceCreation extends LightningElement {
 
             .then(data => {
                 if (data) {
+                    console.log('Invoice Data: ', data);
                     this.patientFirstNameCP = data.Patient_First_Name__c;
                     this.patientLastNameCP = data.Patient_Last_Name__c;
                     this.patientAgeCP = data.Patient_Age__c;
@@ -813,13 +823,14 @@ export default class InvoiceCreation extends LightningElement {
             patientRegisterNumberCP: this.patientRegisterNumberCP,
             patientGenderCP: this.patientGenderCP,
             doctorInputCP: this.doctorInputCP,
+            comment:this.comment,
             invoiceType: this.selectedInvoiceType,
             selectedChannelPartner: this.selectedChannelPartner,
             selectedDeliveryChallan: this.selectedDeliveryChallan,
             lineItemIds: selectedLineItems,
             creditNoteId: this.selectedCreditNotes.length > 0 ? this.selectedCreditNotes.map(note => note.value) : null
         };
-        console.log('invoice data is ', invoiceDataCP);
+        console.log('invoice data CP is ', invoiceDataCP);
         saveInvoiceCP({ invoiceDataCP: JSON.stringify(invoiceDataCP), selectedInvoice: this.selectedInvoice })
             .then(result => {
                 this.isSubmitDisabled = true;
@@ -833,6 +844,14 @@ export default class InvoiceCreation extends LightningElement {
                 );
                 this.showSuccessModal = true;
                 this.isChannelPartnerMode = false;
+                this[NavigationMixin.Navigate]({
+                    type: 'standard__recordPage',
+                    attributes: {
+                        recordId: result,
+                        objectApiName: 'Invoice__c',
+                        actionName: 'view'
+                    }
+                });
             })
             .catch(error => {
                 this.dispatchEvent(

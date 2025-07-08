@@ -1,4 +1,4 @@
-public with sharing class InvoiceCreationController {
+public without sharing class InvoiceCreationController {
     
     @AuraEnabled(cacheable=true)
     public static Map<String, Object> getUserAccountsAndHospitals() {
@@ -263,7 +263,7 @@ public with sharing class InvoiceCreationController {
     
     
     @AuraEnabled
-    public static void saveInvoice(String invoiceData) {
+    public static Id saveInvoice(String invoiceData) {
         try {
             Map<String, Id> recordTypeMap = new Map<String, Id>();
             for (RecordType rt : [
@@ -483,46 +483,43 @@ public with sharing class InvoiceCreationController {
                 update updateToConsumedInRcvdDC;
             }
             
-            
-            Set<String> userIds = new Set<String>();      
+            Set<Id> userIds = new Set<Id>();      
             List<String> emailAddresses = new List<String>();
             
-            Hospital__c hosp = [
-                SELECT Id, Contact_Email__c, CC_Email_Address__c 
-                FROM Hospital__c 
-                WHERE Id = :invoice.Hospital__c
-            ];
-            
+            // Step 1: Get current account owned by user
             Account currentAccount = [
-                SELECT Id, Business_Owner__c, ParentId, Business_Owner__r.Email 
+                SELECT Id, Business_Owner__c, Business_Owner__r.Email, ParentId 
                 FROM Account 
                 WHERE Business_Owner__c = :currentUserId 
                 LIMIT 1
             ];
             
-            if (currentAccount != null) {
-                if (currentAccount.Business_Owner__c != null) {
-                    userIds.add(currentAccount.Business_Owner__c);
-                    if (currentAccount.Business_Owner__r.Email != null) {
-                        emailAddresses.add(currentAccount.Business_Owner__r.Email);
-                    }
+            // Add current account's business owner
+            if (currentAccount != null && currentAccount.Business_Owner__c != null) {
+                userIds.add(currentAccount.Business_Owner__c);
+                if (currentAccount.Business_Owner__r.Email != null) {
+                    emailAddresses.add(currentAccount.Business_Owner__r.Email);
                 }
+            }
+            
+            // Step 2: If parent account exists, fetch it via utility class
+            if (currentAccount.ParentId != null) {
+                Account parentAccount = AccountAccessUtil.getParentBusinessOwner(currentAccount.ParentId);
                 
-                if (currentAccount.ParentId != null) {
-                    Account parentAccount = [
-                        SELECT Id, Business_Owner__c, Business_Owner__r.Email 
-                        FROM Account 
-                        WHERE Id = :currentAccount.ParentId 
-                        LIMIT 1
-                    ];
-                    if (parentAccount.Business_Owner__c != null) {
-                        userIds.add(parentAccount.Business_Owner__c);
-                        if (parentAccount.Business_Owner__r.Email != null) {
-                            emailAddresses.add(parentAccount.Business_Owner__r.Email);
-                        }
+                if (parentAccount != null && parentAccount.Business_Owner__c != null) {
+                    userIds.add(parentAccount.Business_Owner__c);
+                    if (parentAccount.Business_Owner__r.Email != null) {
+                        emailAddresses.add(parentAccount.Business_Owner__r.Email);
                     }
                 }
             }
+            
+            // Step 3: Add hospital contact/CC emails
+            Hospital__c hosp = [
+                SELECT Id, Contact_Email__c, CC_Email_Address__c 
+                FROM Hospital__c 
+                WHERE Id = :invoice.Hospital__c
+            ];
             
             if (hosp.Contact_Email__c != null) {
                 emailAddresses.add(hosp.Contact_Email__c);
@@ -531,12 +528,15 @@ public with sharing class InvoiceCreationController {
                 emailAddresses.add(hosp.CC_Email_Address__c);
             }
             
+            // Step 4: Get invoice data for email content
             invoice__c curInvoice = [
-                SELECT Id,Name, BillingAccountId__r.Business_Owner__r.Name, Hospital__r.Name, Delivery_Challan__r.Name 
+                SELECT Id, Name, BillingAccountId__r.Business_Owner__r.Name, 
+                Hospital__r.Name, Delivery_Challan__r.Name 
                 FROM invoice__c 
                 WHERE Id = :invoice.Id
             ];
             
+            // Step 5: Send notifications
             if (!userIds.isEmpty()) {
                 String subject = 'New Invoice Generated: ' + curInvoice.Name;
                 
@@ -549,13 +549,25 @@ public with sharing class InvoiceCreationController {
                     + 'Please take appropriate action as needed.\n\n'
                     + 'Best regards,\nZydus DMS';
                 
-                NotificationService.notifyUsers(userIds, curInvoice.Id, subject, body);
+                // Convert Ids to Strings
+                Set<String> stringUserIds = new Set<String>();
+                for (Id uid : userIds) {
+                    stringUserIds.add(String.valueOf(uid));
+                }
+                
+                NotificationService.notifyUsers(
+                    stringUserIds,
+                    curInvoice.Id,
+                    subject,
+                    body
+                );
                 
                 if (!emailAddresses.isEmpty()) {
                     NotificationService.sendEmail(emailAddresses, subject, body);
                 }
             }
             
+            return invoice.Id;
             
         } catch (Exception e) {
             System.debug('Exception in saveInvoice: ' + e.getMessage());
@@ -645,30 +657,46 @@ public with sharing class InvoiceCreationController {
     @AuraEnabled(cacheable=true)
     public static List<Account> getSubChannelPartnerOptions() {
         
-        Id userId = UserInfo.getUserId();
+        Account currAccount=[SELECT Id, RecordType.Name FROM Account WHERE Business_Owner__c = :UserInfo.getUserId()];
+       	String rtName = currAccount.RecordType.Name;
         
-        Account currAccount = [
-            SELECT Id, Name 
-            FROM Account 
-            WHERE Business_Owner__c = :userId 
-            LIMIT 1
-        ];
+        Set<Id> consigneeDistributorsIds = new Set<Id>();
         
-        return [
-            SELECT Id, Name 
-            FROM Account 
-            WHERE ParentId = :currAccount.Id
-        ];
+        if (rtName == 'Super Distributor') {
+            Set<Id> distributorIds = new Set<Id>();
+            
+            for (Account dist : [SELECT Id FROM Account WHERE ParentId = :currAccount.Id]) {
+                consigneeDistributorsIds.add(dist.Id);
+                distributorIds.add(dist.Id);
+            }
+            
+            for (Account subDist : [SELECT Id FROM Account WHERE ParentId IN :distributorIds]) {
+                consigneeDistributorsIds.add(subDist.Id);
+            }
+        } else if (rtName == 'Distributor') {
+            for (Account dist : [SELECT Id FROM Account WHERE ParentId = :currAccount.Id]) {
+                consigneeDistributorsIds.add(dist.Id);
+            }
+        }
+        
+        if (consigneeDistributorsIds.isEmpty()) {
+            return new List<Account>();
+        }
+        
+        return [SELECT Id, Name FROM Account WHERE Id IN :consigneeDistributorsIds];
     }
     
     @AuraEnabled
     public static List<Delivery_Challan__c> getDeliveryChallanForChannelPartner(String Id) {
+        
+        Account currAcc=[SELECT Id FROM Account WHERE Business_Owner__c=:UserInfo.getUserId()];
         
         List<Delivery_Challan__c> allChallans = [
             SELECT Id, Name, Total_Quantity__c, Consignor_Distributor__c,
             Invoiced_To_Hospital_Quantity__c, Invoiced_By_Parent_Account_Quantity__c
             FROM Delivery_Challan__c 
             WHERE Consignee_Distributor__c = : Id
+            AND Consignor_Distributor__c = : currAcc.Id
             AND Invoiced_To_Hospital_Quantity__c > 0
         ];
         
@@ -815,7 +843,7 @@ public with sharing class InvoiceCreationController {
         Set<Id> consigneewhIds = new Set<Id>();
         for (Warehouse__c w : cosigneeWH) consigneewhIds.add(w.Id);
         
-         Map<String, Decimal> consigneeWpMap = new Map<String, Decimal>();
+        Map<String, Decimal> consigneeWpMap = new Map<String, Decimal>();
         for (Warehouse_Product_Line_Items__c wp : [
             SELECT Id,
             Serial_Number__c,
@@ -936,7 +964,7 @@ public with sharing class InvoiceCreationController {
     }
     
     @AuraEnabled
-    public static void saveInvoiceCP(String invoiceDataCP, String selectedInvoice) {
+    public static Id saveInvoiceCP(String invoiceDataCP, String selectedInvoice) {
         ID userId = UserInfo.getUserId();
         Set<String> userIds = new Set<String>();
         
@@ -988,7 +1016,7 @@ public with sharing class InvoiceCreationController {
             
             Delivery_Challan__c dc = [SELECT Id, Consignee_Distributor__c, Consignor_Distributor__c FROM Delivery_Challan__c WHERE Id=:deliveryChallanId];
             
-     
+            
             List<Object> creditNoteObjs = (List<Object>) data.get('creditNoteId');
             List<Id> creditNoteIds = new List<Id>();
             if (creditNoteObjs != null) {
@@ -1086,6 +1114,7 @@ public with sharing class InvoiceCreationController {
             
             for (Warehouse_Product_Line_Items__c item : selectedLineItems) {
                 item.Status__c = 'Consumed';
+                item.Sold_Date__c = System.today();
                 toUpdateWPL.add(item);
                 consumedSerialNumberSet.add(item.Serial_Number__c);
                 
@@ -1154,19 +1183,59 @@ public with sharing class InvoiceCreationController {
             System.debug('consumedSerialNumberSet: '+consumedSerialNumberSet);
             System.debug('consigneeDCLIs: '+consigneeDCLIs);
             
-            for(delivery_challan_line_item__c cur : [select Id , Is_Invoiced_To_Hospital__c, Is_Invoiced_By_parent_Account__c from delivery_challan_line_item__c 
-                                                     where Id IN: consigneeDCLIs]){
-                cur.Is_Invoiced_To_Hospital__c = true;
-                toUpdateInvoicedTOHsopitalList.add(cur);
+            /*for(delivery_challan_line_item__c cur : [select Id , Is_Invoiced_To_Hospital__c, Is_Invoiced_By_parent_Account__c from delivery_challan_line_item__c 
+where Id IN: consigneeDCLIs]){
+cur.Is_Invoiced_To_Hospital__c = true;
+toUpdateInvoicedTOHsopitalList.add(cur);
+}*/
+            
+            Map<Id, Id> dcliToChallanMap = new Map<Id, Id>();
+            for (delivery_challan_line_item__c dcli : [
+                SELECT Id, Delivery_Challan__c 
+                FROM delivery_challan_line_item__c 
+                WHERE Id IN :consigneeDCLIs
+            ]) {
+                dcliToChallanMap.put(dcli.Id, dcli.Delivery_Challan__c);
             }
             
-            for(delivery_challan_line_item__c cur : [select Id , Is_Invoiced_To_Hospital__c, Is_Invoiced_By_parent_Account__c from delivery_challan_line_item__c
-                                                     where delivery_challan__c =: deliveryChallanId AND Serial_Number__c IN : consumedSerialNumberSet]){
-                system.debug('cur dcil is '+cur);
-                cur.Is_Invoiced_To_Hospital__c = true;
-                cur.Is_Invoiced_By_parent_Account__c = true;
-                toUpdateInvoicedTOHsopitalList.add(cur);
+            Set<Id> challanIds = new Set<Id>(dcliToChallanMap.values());
+            
+            List<delivery_challan__Share> sharesToInsert = new List<delivery_challan__Share>();
+            
+            /*for (Id challanId : challanIds) {
+                delivery_challan__Share share = new delivery_challan__Share();
+                share.ParentId = challanId;
+                share.UserOrGroupId = userId;
+                share.AccessLevel = 'Edit';
+                share.RowCause = Schema.delivery_challan__Share.RowCause.Manual;
+                sharesToInsert.add(share);
             }
+            
+            insert sharesToInsert;*/
+            
+            List<delivery_challan_line_item__c> toUpdate = new List<delivery_challan_line_item__c>();
+            for (delivery_challan_line_item__c dcli : [
+                SELECT Id, Is_Invoiced_To_Hospital__c 
+                FROM delivery_challan_line_item__c 
+                WHERE Id IN :consigneeDCLIs
+            ]) {
+                dcli.Is_Invoiced_To_Hospital__c = true;
+                toUpdate.add(dcli);
+            }
+            
+            update toUpdate;
+            
+            //delete sharesToInsert;
+            
+            
+            for(delivery_challan_line_item__c cur : [select Id , Is_Invoiced_To_Hospital__c, Is_Invoiced_By_parent_Account__c, Delivery_Challan__r.Consignor_Distributor__r.Business_Owner__c from delivery_challan_line_item__c
+                                                     where delivery_challan__c =: deliveryChallanId AND Serial_Number__c IN : consumedSerialNumberSet]){
+                                                         system.debug('cur dcil is '+cur);
+                                                         cur.Is_Invoiced_To_Hospital__c = true;
+                                                         cur.Is_Invoiced_By_parent_Account__c = true;
+                                                         userIds.add(cur.Delivery_Challan__r.Consignor_Distributor__r.Business_Owner__c);
+                                                         toUpdateInvoicedTOHsopitalList.add(cur);
+                                                     }
             if(!toUpdateInvoicedTOHsopitalList.isEmpty()){
                 update toUpdateInvoicedTOHsopitalList;
             }
@@ -1220,17 +1289,18 @@ public with sharing class InvoiceCreationController {
                     + 'Best regards,\nZydus DMS';
                 
                 NotificationService.notifyUsers(userIds, curInvoice.Id, subject, body);
+                
                 if (!emailAddresses.isEmpty()) {
                     NotificationService.sendEmail(emailAddresses, subject, body);
                 }
             }
+            return invoice.Id;
             
         } catch (Exception e) {
             System.debug('Exception in saveInvoiceCP: ' + e);
             throw new AuraHandledException('Failed to save CP invoice: ' + e.getMessage());
         }
     }
-    
     
     public class PaymentPayload {
         public Decimal collectedAmt;

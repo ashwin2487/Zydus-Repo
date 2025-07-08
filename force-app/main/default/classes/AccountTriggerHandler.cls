@@ -12,7 +12,36 @@ public class AccountTriggerHandler {
                 }
             }
         }
-    }   
+    }
+    public static void handlePrizeBookSharing(List<Account> newAccounts, Map<Id, Account> oldMap) {
+        List<Zydus_Price_Book__Share> sharesToInsert = new List<Zydus_Price_Book__Share>();
+
+        for (Account acc : newAccounts) {
+            Account oldAcc = oldMap != null ? oldMap.get(acc.Id) : null;
+
+            Boolean isInsert = oldAcc == null;
+            Boolean priceBookChanged = oldAcc != null && acc.Zydus_Price_Book__c != oldAcc.Zydus_Price_Book__c;
+
+            if (isInsert || priceBookChanged) {
+                if (acc.Zydus_Price_Book__c != null && acc.Business_owner__c != null) {
+                    sharesToInsert.add(new Zydus_Price_Book__Share(
+                        ParentId = acc.Zydus_Price_Book__c,
+                        UserOrGroupId = acc.Business_owner__c,
+                        AccessLevel = 'Edit',
+                        RowCause = Schema.Zydus_Price_Book__Share.RowCause.Manual
+                    ));
+                }
+            }
+        }
+
+        if (!sharesToInsert.isEmpty()) {
+            try {
+                insert sharesToInsert;
+            } catch (DmlException e) {
+                System.debug('Error sharing Zydus_Price_Book__c: ' + e.getMessage());
+            }
+        }
+    }
     public static void validateAccountCreation(List<Account> newAccounts) {
         User currentUser = [SELECT UserRole.Name, Profile.Name FROM User WHERE Id = :UserInfo.getUserId()];
         String userRole = currentUser.UserRole != null ? currentUser.UserRole.Name : '';

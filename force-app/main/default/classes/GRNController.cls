@@ -63,7 +63,7 @@ public without sharing class GRNController {
                 };             
                     }
     @AuraEnabled
-    public static void processGRN(Id challanId, List<Map<String, Object>> lineItems) {
+    public static Id processGRN(Id challanId, List<Map<String, Object>> lineItems) {
         
         ID userId = UserInfo.getUserId();
         User currentUser = [
@@ -96,6 +96,7 @@ public without sharing class GRNController {
             LIMIT 1
         ];
 
+        GRN__c grn;
         if (inProcessDC.RecordType.DeveloperName == 'DC') {
             Account consigneeDistributor = [
                 SELECT Id, Business_Owner__c, Zydus_Price_Book__c 
@@ -122,7 +123,7 @@ public without sharing class GRNController {
             }
             
             Id rtID = [SELECT Id FROM RecordType WHERE SObjectType = 'GRN__c' AND DeveloperName = 'Manual_GRN' LIMIT 1].Id;
-            GRN__c grn = new GRN__c(
+             grn = new GRN__c(
                 Delivery_Challan__c = challanId,
                 GRN_Date__c = System.today(),
                 RecordTypeId = rtID
@@ -456,5 +457,7 @@ public without sharing class GRNController {
             }
             
         }
+        
+    return grn.Id;
     }   
 }

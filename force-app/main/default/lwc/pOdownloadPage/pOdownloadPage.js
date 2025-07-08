@@ -150,9 +150,9 @@ export default class POdownloadPage extends LightningElement {
                 const cgst = product.CGST__c || 0;
                 const sgst = product.SGST__c || 0;
 
-                const cgstRate = (cgst * 100) / unitPrice;
-                const sgstRate = (sgst * 100) / unitPrice;
-                const igstRate = (igst * 100) / unitPrice;
+                const cgstRate = (cgst * 10) / unitPrice;
+                const sgstRate = (sgst * 10) / unitPrice;
+                const igstRate = (igst * 10) / unitPrice;
 
                 const totalValue = grossAmount + cgst + sgst + igst;
                 this.totalCGSTAmount += cgst;

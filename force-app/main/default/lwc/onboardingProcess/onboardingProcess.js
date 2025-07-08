@@ -627,6 +627,12 @@ export default class OnboardingProcess extends LightningElement {
     }
 
     handleSelectDTChange(event) {
+        this.selectedDistributor = '';
+        this.selectedDistributorId = '';
+        this.selectedSuperDistributor = '';
+        this.selectedSuperDistributorId = '';
+        this.selectedSubDistributor = '';
+        this.selectedSubDistributorId = '';
         this.selectedDistributorType = event.detail.value;
         this.isDMDisabled = this.selectedDistributorType !== 'Sub Distributor';
         this.isSDMDisabled = this.selectedDistributorType === 'Super Distributor';
@@ -1048,34 +1054,27 @@ export default class OnboardingProcess extends LightningElement {
     }
 
     loadUserHierarchy() {
-        fetchUserDistributorHierarchy({ userId: USER_ID })
+        fetchUserDistributorHierarchy({ userId: USER_ID }) // Replace USER_ID with actual logic
             .then(result => {
                 this.roleHOB = result.role || '';
 
                 if (this.roleHOB === 'System Admin') {
                     this.superDistributorOptionsHOB = result.superDistributorOptions || [];
-                    this.selectedSuperDistributorHOB = null;
-                    this.selectedDistributorHOB = null;
-                    this.selectedSubDistributorHOB = null;
-                    this.distributorOptionsHOB = [];
-                    this.subDistributorOptionsHOB = [];
+                    this.resetSelections();
                 } else {
                     if (result.superDistributor) {
-                        this.mappingSelectedSuperDistributorId = result.superDistributor.Id;
                         this.selectedSuperDistributorHOB = {
                             label: result.superDistributor.Name,
                             value: result.superDistributor.Id
                         };
                     }
                     if (result.distributor) {
-                        this.mappingSelectedDistributorId = result.distributor.Id;
                         this.selectedDistributorHOB = {
                             label: result.distributor.Name,
                             value: result.distributor.Id
                         };
                     }
                     if (result.subDistributor) {
-                        this.mappingSelectedSubDistributorId = result.subDistributor.Id;
                         this.selectedSubDistributorHOB = {
                             label: result.subDistributor.Name,
                             value: result.subDistributor.Id
@@ -1091,18 +1090,28 @@ export default class OnboardingProcess extends LightningElement {
             });
     }
 
+    resetSelections() {
+        this.selectedSuperDistributorHOB = null;
+        this.selectedDistributorHOB = null;
+        this.selectedSubDistributorHOB = null;
+        this.distributorOptionsHOB = [];
+        this.subDistributorOptionsHOB = [];
+    }
+
+    // ✅ Role-based UI access
     get isSuperDistributorDisabledHOB() {
         return this.roleHOB !== 'System Admin';
     }
 
     get isDistributorDisabledHOB() {
-        return !(this.roleHOB === 'System Admin' || this.roleHOB === 'Super Distributor' || this.roleHOB === 'Distributor');
+        return !['System Admin', 'Super Distributor', 'Distributor'].includes(this.roleHOB);
     }
 
     get isSubDistributorDisabledHOB() {
-        return !(this.roleHOB === 'System Admin' || this.roleHOB === 'Distributor' || this.roleHOB === 'Sub Distributor');
+        return !['System Admin', 'Super Distributor', 'Distributor', 'Sub Distributor'].includes(this.roleHOB);
     }
 
+    // ✅ Options and Values for Comboboxes
     get HOBsuperDistributorOptionsHOB() {
         return this.superDistributorOptionsHOB;
     }
@@ -1116,15 +1125,15 @@ export default class OnboardingProcess extends LightningElement {
     }
 
     get HOBselectedSuperDistributorHOBValue() {
-        return this.selectedSuperDistributorHOB ? this.selectedSuperDistributorHOB.value : null;
+        return this.selectedSuperDistributorHOB?.value || null;
     }
 
     get HOBselectedDistributorHOBValue() {
-        return this.selectedDistributorHOB ? this.selectedDistributorHOB.value : null;
+        return this.selectedDistributorHOB?.value || null;
     }
 
     get HOBselectedSubDistributorHOBValue() {
-        return this.selectedSubDistributorHOB ? this.selectedSubDistributorHOB.value : null;
+        return this.selectedSubDistributorHOB?.value || null;
     }
 
     get HOBselectedSuperDistributorHOB() {
@@ -1139,17 +1148,17 @@ export default class OnboardingProcess extends LightningElement {
         return this.selectedSubDistributorHOB;
     }
 
+    // ✅ Change Handlers
     HOBhandleSuperDistributorChange(event) {
         const selectedValue = event.detail.value;
         this.selectedSuperDistributorHOB = this.superDistributorOptionsHOB.find(opt => opt.value === selectedValue) || null;
-        this.mappingSelectedSuperDistributorId = selectedValue;
         this.selectedDistributorHOB = null;
         this.selectedSubDistributorHOB = null;
         this.distributorOptionsHOB = [];
         this.subDistributorOptionsHOB = [];
 
         if (this.selectedSuperDistributorHOB) {
-            getDistributorsBySuper({ superDistributorId: this.selectedSuperDistributorHOB.value })
+            getDistributorsBySuper({ superDistributorId: selectedValue })
                 .then(distributors => {
                     this.distributorOptionsHOB = distributors;
                 })
@@ -1163,12 +1172,11 @@ export default class OnboardingProcess extends LightningElement {
     HOBhandleDistributorChange(event) {
         const selectedValue = event.detail.value;
         this.selectedDistributorHOB = this.distributorOptionsHOB.find(opt => opt.value === selectedValue) || null;
-        this.mappingSelectedDistributorId = selectedValue;
         this.selectedSubDistributorHOB = null;
         this.subDistributorOptionsHOB = [];
 
         if (this.selectedDistributorHOB) {
-            getSubDistributorsByDistributor({ distributorId: this.selectedDistributorHOB.value })
+            getSubDistributorsByDistributor({ distributorId: selectedValue })
                 .then(subDistributors => {
                     this.subDistributorOptionsHOB = subDistributors;
                 })
@@ -1182,27 +1190,26 @@ export default class OnboardingProcess extends LightningElement {
     HOBhandleSubDistributorChange(event) {
         const selectedValue = event.detail.value;
         this.selectedSubDistributorHOB = this.subDistributorOptionsHOB.find(opt => opt.value === selectedValue) || null;
-        this.mappingSelectedSubDistributorId = selectedValue;
     }
 
+    // ✅ Pill Removal Handler
     HOBhandleRemovePill(event) {
         const pillName = event.target.name;
 
-        if (pillName === 'super') {
-            this.selectedSuperDistributorHOB = null;
-            this.selectedDistributorHOB = null;
-            this.selectedSubDistributorHOB = null;
-            this.distributorOptionsHOB = [];
-            this.subDistributorOptionsHOB = [];
-        } else if (pillName === 'distributor') {
-            this.selectedDistributorHOB = null;
-            this.selectedSubDistributorHOB = null;
-            this.subDistributorOptionsHOB = [];
-        } else if (pillName === 'subDistributor') {
-            this.selectedSubDistributorHOB = null;
+        switch (pillName) {
+            case 'super':
+                this.resetSelections();
+                break;
+            case 'distributor':
+                this.selectedDistributorHOB = null;
+                this.selectedSubDistributorHOB = null;
+                this.subDistributorOptionsHOB = [];
+                break;
+            case 'subDistributor':
+                this.selectedSubDistributorHOB = null;
+                break;
         }
     }
-
     get selectedCommentOptionsString() {
         return this.commentOptionSelected.map(option => option.value).join(',');
     }
@@ -1239,47 +1246,48 @@ export default class OnboardingProcess extends LightningElement {
             return;
         }
 
-        const hasSelectedPartner = this.mappingSelectedSuperDistributorId || this.mappingSelectedDistributorId || this.mappingSelectedSubDistributorId;
+        const hasSelectedPartner = this.selectedSuperDistributorHOB || this.selectedDistributorHOB || this.selectedSubDistributorHOB;
 
         if (!hasSelectedPartner) {
             this.showToast('Warning', 'Please select at least one Channel Partner before submitting.', 'warning');
             return;
         }
 
-        const hospitalRecordPayload = {
-            hospitalName: this.hospitalName,
-            hospRegistrationNumber: this.hospRegistrationNumber,
-            hospGroup: this.hospGroup,
-            firstName: this.firstName,
-            lastName: this.lastName,
-            email: this.email,
-            mobile: this.mobile,
-            ccEmail: this.ccEmail,
-            billingAddress: this.billingAddress,
-            city: this.city,
-            selectedPriceBook: this.selectedPriceBook,
-            selectedState: this.selectedState,
-            pin: parseInt(this.pin, 10),
-            shippingAddress: this.shippingAddress,
-            shipCity: this.shipCity,
-            selectedShipState: this.selectedShipState,
-            shipPin: this.shipPin,
-            shipTitle: this.shipTitle,
-            selectedSuperDistributor: this.mappingSelectedSuperDistributorId,
-            selectedDistributor: this.mappingSelectedDistributorId,
-            selectedSubDistributor: this.mappingSelectedSubDistributorId,
-            panNumber: this.panNumber,
-            gstNumber: this.gstNumber,
-            dlNo: this.dlNo,
-            dlExpiryDate: this.dlExpiryDate,
-            doctorName: this.doctorName,
-            paymentTerm: this.paymentTerm,
-            invoiceComment: this.invoiceComment,
-            hospitalId: this.hospitalId,
-            phyziiId: this.phyziiId,
-            selectedProducts: this.selectedProducts,
-            commentOptionSelected: this.selectedCommentOptionsString
-        };
+const hospitalRecordPayload = {
+    hospitalName: this.hospitalName,
+    hospRegistrationNumber: this.hospRegistrationNumber,
+    hospGroup: this.hospGroup,
+    firstName: this.firstName,
+    lastName: this.lastName,
+    email: this.email,
+    mobile: this.mobile,
+    ccEmail: this.ccEmail,
+    billingAddress: this.billingAddress,
+    city: this.city,
+    selectedPriceBook: this.selectedPriceBook,
+    selectedState: this.selectedState,
+    pin: this.pin,
+    shippingAddress: this.shippingAddress,
+    shipCity: this.shipCity,
+    selectedShipState: this.selectedShipState,
+    shipPin: this.shipPin,
+    shipTitle: this.shipTitle,
+    selectedSuperDistributor: this.selectedSuperDistributorHOB?.value || null,
+    selectedDistributor: this.selectedDistributorHOB?.value || null,
+    selectedSubDistributor: this.selectedSubDistributorHOB?.value || null,
+    panNumber: this.panNumber,
+    gstNumber: this.gstNumber,
+    dlNo: this.dlNo,
+    dlExpiryDate: this.dlExpiryDate,
+    doctorName: this.doctorName,
+    paymentTerm: this.paymentTerm,
+    invoiceComment: this.invoiceComment,
+    hospitalId: this.hospitalId,
+    phyziiId: this.phyziiId,
+    selectedProducts: this.selectedProducts,
+    commentOptionSelected: this.selectedCommentOptionsString
+};
+
 
         console.log('Hospital Record Payload:', JSON.stringify(hospitalRecordPayload));
         this.isLoading = true;

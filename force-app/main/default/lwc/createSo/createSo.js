@@ -3,8 +3,9 @@ import getOpportunityWithWarehouseData from '@salesforce/apex/OpportunitySupplyO
 import createSupplyOrderFromOpportunity from '@salesforce/apex/OpportunitySupplyOrderHelper.createSupplyOrderFromOpportunity';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { CloseActionScreenEvent } from 'lightning/actions';
+import { NavigationMixin } from 'lightning/navigation';
 
-export default class CreateSo extends LightningElement {
+export default class CreateSo extends NavigationMixin(LightningElement) {
     @api recordId;
     @track lineItems = [];
     @track isCreateDisabled = true;
@@ -13,9 +14,7 @@ export default class CreateSo extends LightningElement {
     @wire(getOpportunityWithWarehouseData, { purchaseOrderId: '$recordId' })
     wiredData({ error, data }) {
         if (data) {
-
-            console.log('DATA',data);
-            // this.lineItems = data.purchaseOrderLineItems;)
+            console.log('DATA', data);
             this.lineItems = data.map(item => {
                 const unitPrice = parseFloat(item.unitPrice || 0);
                 const cgst = parseFloat(item.cgst || 0);
@@ -29,11 +28,24 @@ export default class CreateSo extends LightningElement {
                 const sgstAmount = (baseAmount * sgst) / 100;
                 const igstAmount = (baseAmount * igst) / 100;
                 const netAmount = baseAmount + cgstAmount + sgstAmount + igstAmount;
-                
+
+                // Prepare warehouse options and check for auto-selection
+                const warehouseOptions = (item.warehouseOptions || []).map(opt => ({
+                    label: opt.label,
+                    value: opt.value,
+                    quantity: opt.quantity
+                }));
+
+                let selectedWarehouse = item.SelectedWarehouse || '';
+
+                if (warehouseOptions.length === 1) {
+                    selectedWarehouse = warehouseOptions[0].value;
+                }
+
                 return {
                     ...item,
                     isSelected: false,
-                    SelectedWarehouse: item.SelectedWarehouse || '',
+                    SelectedWarehouse: selectedWarehouse,
                     AvailableQty: item.availableQty || 0,
                     requestedQty: item.requestedQty || 0,
                     pendingQty: item.pendingQty || 0,
@@ -48,11 +60,7 @@ export default class CreateSo extends LightningElement {
                     UnitPriceFormatted: this.formatINR(unitPrice),
                     FinalPriceFormatted: this.formatINR(unitPrice),
                     NetAmountFormatted: this.formatINR(netAmount),
-                    warehouseOptions: (item.warehouseOptions || []).map(opt => ({
-                        label: opt.label,
-                        value: opt.value,
-                        quantity: opt.quantity
-                    })),
+                    warehouseOptions: warehouseOptions,
                     pricebookEntry: item.pricebookEntry,
                     hsnCode: item.hsnCode,
                     hsnId: item.hsnId
@@ -63,7 +71,6 @@ export default class CreateSo extends LightningElement {
             console.error(error);
         }
     }
-
     formatINR(value) {
         return new Intl.NumberFormat('en-IN', {
             style: 'currency',
@@ -83,58 +90,58 @@ export default class CreateSo extends LightningElement {
     }
 
     handleWarehouseChange(event) {
-    const rowId = event.target.dataset.id;
-    const warehouseId = event.detail.value;
-    const item = this.lineItems.find(i => i.lineItemId === rowId);
+        const rowId = event.target.dataset.id;
+        const warehouseId = event.detail.value;
+        const item = this.lineItems.find(i => i.lineItemId === rowId);
 
-    if (item) {
-        item.SelectedWarehouse = warehouseId;
-        const selected = item.warehouseOptions.find(opt => opt.value === warehouseId);
-        item.AvailableQty = selected ? selected.quantity : 0;
+        if (item) {
+            item.SelectedWarehouse = warehouseId;
+            const selected = item.warehouseOptions.find(opt => opt.value === warehouseId);
+            item.AvailableQty = selected ? selected.quantity : 0;
 
-        const unitPrice = parseFloat(item.unitPrice || 0);
-        const cgstRate = parseFloat(item.cgst || 0);
-        const sgstRate = parseFloat(item.sgst || 0);
-        const igstRate = parseFloat(item.igst || 0);
+            const unitPrice = parseFloat(item.unitPrice || 0);
+            const cgstRate = parseFloat(item.cgst || 0);
+            const sgstRate = parseFloat(item.sgst || 0);
+            const igstRate = parseFloat(item.igst || 0);
 
-        const pendingQty = parseFloat(item.pendingQty || 0);
-        const availableQty = parseFloat(item.AvailableQty || 0);
+            const pendingQty = parseFloat(item.pendingQty || 0);
+            const availableQty = parseFloat(item.AvailableQty || 0);
 
-        if (availableQty > 0 && pendingQty > 0) {
-            const finalQty = availableQty >= pendingQty ? pendingQty : availableQty;
+            if (availableQty > 0 && pendingQty > 0) {
+                const finalQty = availableQty >= pendingQty ? pendingQty : availableQty;
 
-            const baseAmount = unitPrice * finalQty;
-            const cgstAmount = (baseAmount * cgstRate) / 100;
-            const sgstAmount = (baseAmount * sgstRate) / 100;
-            const igstAmount = (baseAmount * igstRate) / 100;
-            const netAmount = baseAmount + cgstAmount + sgstAmount + igstAmount;
+                const baseAmount = unitPrice * finalQty;
+                const cgstAmount = (baseAmount * cgstRate) / 100;
+                const sgstAmount = (baseAmount * sgstRate) / 100;
+                const igstAmount = (baseAmount * igstRate) / 100;
+                const netAmount = baseAmount + cgstAmount + sgstAmount + igstAmount;
 
-            item.finalQty = finalQty;
-            item.CGSTAmount = cgstAmount;
-            item.SGSTAmount = sgstAmount;
-            item.IGSTAmount = igstAmount;
-            item.NetAmount = netAmount;
+                item.finalQty = finalQty;
+                item.CGSTAmount = cgstAmount;
+                item.SGSTAmount = sgstAmount;
+                item.IGSTAmount = igstAmount;
+                item.NetAmount = netAmount;
 
-            item.CGSTAmountFormatted = this.formatINR(cgstAmount);
-            item.SGSTAmountFormatted = this.formatINR(sgstAmount);
-            item.IGSTAmountFormatted = this.formatINR(igstAmount);
-            item.NetAmountFormatted = this.formatINR(netAmount);
-        } else {
-            item.finalQty = 0;
-            item.CGSTAmount = 0;
-            item.SGSTAmount = 0;
-            item.IGSTAmount = 0;
-            item.NetAmount = 0;
+                item.CGSTAmountFormatted = this.formatINR(cgstAmount);
+                item.SGSTAmountFormatted = this.formatINR(sgstAmount);
+                item.IGSTAmountFormatted = this.formatINR(igstAmount);
+                item.NetAmountFormatted = this.formatINR(netAmount);
+            } else {
+                item.finalQty = 0;
+                item.CGSTAmount = 0;
+                item.SGSTAmount = 0;
+                item.IGSTAmount = 0;
+                item.NetAmount = 0;
 
-            item.CGSTAmountFormatted = this.formatINR(0);
-            item.SGSTAmountFormatted = this.formatINR(0);
-            item.IGSTAmountFormatted = this.formatINR(0);
-            item.NetAmountFormatted = this.formatINR(0);
+                item.CGSTAmountFormatted = this.formatINR(0);
+                item.SGSTAmountFormatted = this.formatINR(0);
+                item.IGSTAmountFormatted = this.formatINR(0);
+                item.NetAmountFormatted = this.formatINR(0);
+            }
+
+            this.lineItems = [...this.lineItems];
         }
-
-        this.lineItems = [...this.lineItems]; 
     }
-}
 
 
     handleCreateSO() {
@@ -177,7 +184,7 @@ export default class CreateSo extends LightningElement {
             const finalQty = availableQty >= pendingQty ? pendingQty : availableQty;
 
             if (finalQty <= 0) {
-                continue; 
+                continue;
             }
             const unitPrice = parseFloat(item.unitPrice || 0);
             const baseAmount = unitPrice;
@@ -216,12 +223,21 @@ export default class CreateSo extends LightningElement {
             purchaseOrderId: this.recordId,
             linesJson: JSON.stringify(payload)
         })
-            .then(() => {
+            .then((SoId) => {
                 this.dispatchEvent(new ShowToastEvent({
                     title: 'Success',
                     message: 'Supply Order created successfully!',
                     variant: 'success'
                 }));
+               
+                    this[NavigationMixin.Navigate]({
+                        type: 'standard__recordPage',
+                        attributes: {
+                            recordId: SoId,
+                            objectApiName: 'Supply_Order__c',
+                            actionName: 'view'
+                        }
+                    });
                 this.dispatchEvent(new CloseActionScreenEvent());
             })
             .catch(error => {

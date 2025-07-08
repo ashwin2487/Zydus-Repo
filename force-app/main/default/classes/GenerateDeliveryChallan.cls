@@ -1,25 +1,27 @@
 public without sharing class GenerateDeliveryChallan {
-    
     @AuraEnabled
     public static String createDeliveryChallan(Id supplyOrderId) {
         try {
             ID userId = UserInfo.getUserId();
             
             Supply_Order__c supplyOrder = [
-                SELECT Id, Name, New_Purchase_Order__c, isDCCreated__c,
-                Consignee_Distributor__c, Consignee_Hospital__c,Consignee_Hospital__r.Comment_Options__c, Consignor_Distributor__c,Consignor_Distributor__r.Business_owner__c,New_Purchase_Order__r.RecordType.Name,
-                Consignee_Hospital__r.Invoice_Comment__c
+                SELECT Id, Name, New_Purchase_Order__c, isDCCreated__c, RecordType.Name,
+                Consignee_Distributor__c, Consignee_Hospital__c, Consignee_Hospital__r.Comment_Options__c,
+                Consignor_Distributor__c, Consignor_Distributor__r.Business_owner__c,
+                New_Purchase_Order__r.RecordType.Name,
+                Consignee_Hospital__r.Invoice_Comment__c,
+                Consignee_Distributor__r.Business_owner__c
                 FROM Supply_Order__c
                 WHERE Id = :supplyOrderId
                 LIMIT 1
             ];
             
             Id paretnAccountUserId = supplyOrder.Consignor_Distributor__r.Business_owner__c;
-            if(userId != paretnAccountUserId){
+            if (userId != paretnAccountUserId) {
                 return 'Access denied: Unauthorized entry attempt detected. Please reach out to your system administrator immediately.';
             }
             
-            // Step 1: Get RecordType ID for 'DC'
+            // RecordType Mapping
             Map<String, Id> recordTypeMap = new Map<String, Id>();
             for (RecordType rt : [
                 SELECT Id, Name FROM RecordType WHERE SObjectType = 'Delivery_Challan__c'
@@ -34,35 +36,47 @@ public without sharing class GenerateDeliveryChallan {
             if (supplyOrder.isDCCreated__c) {
                 return 'The Delivery Challan for this Supply Order has already been generated!';
             }
+            
+            Boolean isManualSO = (supplyOrder.New_Purchase_Order__c == null);
+            
             Delivery_Challan__c dc = new Delivery_Challan__c();
-            // Step 3: Create Delivery Challan
-            if(supplyOrder.Consignee_Distributor__c != null && supplyOrder.Consignee_Hospital__c == null && supplyOrder.New_Purchase_Order__r.RecordType.Name != 'Hospital Purchase Order'){
-                
-                dc.Name = supplyOrder.Name.replace('SO', 'DC');
-                dc.Supply_Order__c = supplyOrder.Id;
-                dc.DC_Generated_Date__c = System.today();
+            dc.Name = supplyOrder.Name.replace('SO', 'DC');
+            dc.Supply_Order__c = supplyOrder.Id;
+            dc.DC_Generated_Date__c = System.today();
+            dc.Consignor_Distributor__c = supplyOrder.Consignor_Distributor__c;
+            
+            if (supplyOrder.Consignee_Distributor__c != null) {
                 dc.Consignee_Distributor__c = supplyOrder.Consignee_Distributor__c;
-                dc.Consignor_Distributor__c = supplyOrder.Consignor_Distributor__c;
-                dc.RecordTypeId = recordTypeMap.get('DC');
-            }else if(supplyOrder.Consignee_Distributor__c == null && supplyOrder.Consignee_Hospital__c != null && supplyOrder.New_Purchase_Order__r.RecordType.Name == 'Hospital Purchase Order'){
-                if(supplyOrder.Consignee_Hospital__r.Comment_Options__c != null && supplyOrder.Consignee_Hospital__r.Comment_Options__c.contains('DCL')){
-                    if(supplyOrder.Consignee_Hospital__r.Invoice_Comment__c != null){
+                dc.RecordTypeId = supplyOrder.RecordType.Name == 'RSO' ? recordTypeMap.get('RDC') : recordTypeMap.get('DC');
+                
+                if (supplyOrder.RecordType.Name == 'RSO') {
+                    dc.OwnerId = supplyOrder.Consignor_Distributor__r.Business_owner__c;
+                } else {
+                    dc.OwnerId = supplyOrder.Consignee_Distributor__r.Business_owner__c;
+                }
+            } else if (supplyOrder.Consignee_Hospital__c != null) {
+                dc.Consignee_Hospital__c = supplyOrder.Consignee_Hospital__c;
+                dc.RecordTypeId = recordTypeMap.get('HDC');
+                if (supplyOrder.Consignee_Hospital__r.Comment_Options__c != null &&
+                    supplyOrder.Consignee_Hospital__r.Comment_Options__c.contains('DCL') &&
+                    supplyOrder.Consignee_Hospital__r.Invoice_Comment__c != null) {
                         dc.Comment__c = supplyOrder.Consignee_Hospital__r.Invoice_Comment__c;
                     }
-                }
-                dc.Name = supplyOrder.Name.replace('SO', 'DC');
-                dc.Supply_Order__c = supplyOrder.Id;
-                dc.DC_Generated_Date__c = System.today();
-                dc.Consignee_Hospital__c = supplyOrder.Consignee_Hospital__c;
-                dc.Consignor_Distributor__c = supplyOrder.Consignor_Distributor__c;
-                dc.RecordTypeId = recordTypeMap.get('HDC');
             }
+            
             insert dc;
             
-            // Step 4: Get SO Line Items & SO Products
+            Set<Id> shareUserIds = new Set<Id>{
+                supplyOrder.Consignor_Distributor__r.Business_owner__c
+                    };
+                        if (supplyOrder.Consignee_Distributor__r != null) {
+                            shareUserIds.add(supplyOrder.Consignee_Distributor__r.Business_owner__c);
+                        }
+            RecordSharingUtilityBulk.shareRecords(new List<Id>{dc.Id}, shareUserIds);
+            
             List<Supply_Order_Line_Item__c> soLineItems = [
-                SELECT Id,Zydus_Product__c, Zydus_Product__r.Name, Net_Amount__c, Batch_Number__c,
-                CGST__c, SGST__c, IGST__c, HSN_Code__c, Serial_Number__c,Unit_Price__c,
+                SELECT Id, Zydus_Product__c, Zydus_Product__r.Name, Net_Amount__c, Batch_Number__c,
+                CGST__c, SGST__c, IGST__c, HSN_Code__c, Serial_Number__c, Unit_Price__c,
                 Warehouse__c, Name, Expiry_Date__c, Manufacturing_Date__c, List_Price__c, Zydus_Price_Book_Entry__c
                 FROM Supply_Order_Line_Item__c
                 WHERE Supply_Order__c = :supplyOrder.Id
@@ -74,7 +88,6 @@ public without sharing class GenerateDeliveryChallan {
                 WHERE Supply_Order__c = :supplyOrder.Id
             ];
             
-            // Step 5: Create DC Products
             Map<Id, DC_Product__c> productToDCProd = new Map<Id, DC_Product__c>();
             for (SO_Product__c soProd : soProducts) {
                 if (soProd.Zydus_Product__c != null && !productToDCProd.containsKey(soProd.Zydus_Product__c)) {
@@ -87,127 +100,102 @@ public without sharing class GenerateDeliveryChallan {
             }
             insert productToDCProd.values();
             
-            // Step 6: Fetch Purchase Order Products
-            List<Purchase_Order_Product__c> POPs = [
-                SELECT Id, Quantity__c, Purchase_Order__c, Supplied_Quantity__c, Zydus_Product__c
-                FROM Purchase_Order_Product__c
-                WHERE Purchase_Order__c = :supplyOrder.New_Purchase_Order__c
-            ];
-            
-            Map<Id, Purchase_Order_Product__c> productToPOPMap = new Map<Id, Purchase_Order_Product__c>();
-            Set<Id> poIdSet = new Set<Id>();
-            Set<Id> poPOPIdSet = new Set<Id>();
-            
-            for (Purchase_Order_Product__c pop : POPs) {
-                if (pop.Zydus_Product__c != null) {
-                    productToPOPMap.put(pop.Zydus_Product__c, pop);
-                    poIdSet.add(pop.Purchase_Order__c);
-                    poPOPIdSet.add(pop.Id);
-                }
-            }
-            
-            // Step 7: Create DC Line Items and update POP supplied quantity
             List<Delivery_Challan_Line_Item__c> dcLineItems = new List<Delivery_Challan_Line_Item__c>();
-            List<Purchase_Order_Product__c> POPsToUpdate = new List<Purchase_Order_Product__c>();
-            Set<Id> addedPOPIds = new Set<Id>();
             Set<Id> soLineItemsIDSet = new Set<ID>();
+            
             for (Supply_Order_Line_Item__c soItem : soLineItems) {
-                if (soItem.Zydus_Product__c == null || !productToDCProd.containsKey(soItem.Zydus_Product__c)) continue;
-                
-                dcLineItems.add(new Delivery_Challan_Line_Item__c(
-                    Delivery_Challan__c = dc.Id,
-                    DC_Product__c = productToDCProd.get(soItem.Zydus_Product__c).Id,
-                    Zydus_Product__c = soItem.Zydus_Product__c,
-                    Net_Amount__c = soItem.Net_Amount__c,
-                    CGST__c = soItem.CGST__c,
-                    SGST__c = soItem.SGST__c,
-                    IGST__c = soItem.IGST__c,
-                    Zydus_Price_Book_Entry__c = soItem.Zydus_Price_Book_Entry__c,
-                    List_Price__c = soItem.List_Price__c,
-                    Unit_Price__c = soItem.Unit_Price__c,
-                    HSN_Code__c = soItem.HSN_Code__c,
-                    Serial_Number__c = soItem.Serial_Number__c,
-                    Batch_Number__c = soItem.Batch_Number__c,
-                    Expiry_Date__c = soItem.Expiry_Date__c,
-                    Warehouse__c = soItem.Warehouse__c,
-                    Manufacturing_Date__c = soItem.Manufacturing_Date__c,
-                    Name = soItem.Name.replace('SO', 'DC')
-                ));
                 soLineItemsIDSet.add(soItem.Id);
-                Purchase_Order_Product__c pop = productToPOPMap.get(soItem.Zydus_Product__c);
-                if (pop != null) {
-                    pop.Supplied_Quantity__c = (pop.Supplied_Quantity__c == null ? 0 : pop.Supplied_Quantity__c) + 1;
-                    if (!addedPOPIds.contains(pop.Id)) {
-                        POPsToUpdate.add(pop);
-                        addedPOPIds.add(pop.Id);
-                    }
+                
+                if (soItem.Zydus_Product__c != null && productToDCProd.containsKey(soItem.Zydus_Product__c)) {
+                    dcLineItems.add(new Delivery_Challan_Line_Item__c(
+                        Delivery_Challan__c = dc.Id,
+                        DC_Product__c = productToDCProd.get(soItem.Zydus_Product__c).Id,
+                        Zydus_Product__c = soItem.Zydus_Product__c,
+                        Net_Amount__c = soItem.Net_Amount__c,
+                        CGST__c = soItem.CGST__c,
+                        SGST__c = soItem.SGST__c,
+                        IGST__c = soItem.IGST__c,
+                        Zydus_Price_Book_Entry__c = soItem.Zydus_Price_Book_Entry__c,
+                        List_Price__c = soItem.List_Price__c,
+                        Unit_Price__c = soItem.Unit_Price__c,
+                        HSN_Code__c = soItem.HSN_Code__c,
+                        Serial_Number__c = soItem.Serial_Number__c,
+                        Batch_Number__c = soItem.Batch_Number__c,
+                        Expiry_Date__c = soItem.Expiry_Date__c,
+                        Warehouse__c = soItem.Warehouse__c,
+                        Manufacturing_Date__c = soItem.Manufacturing_Date__c,
+                        Name = soItem.Name.replace('SO', 'DC')
+                    ));
                 }
             }
-            
             insert dcLineItems;
-            update POPsToUpdate;
             
-            
-            // Step 8: Mark Supply Order as DC Created
-            supplyOrder.isDCCreated__c = true;
-            update supplyOrder;
             List<Warehouse_Product_Line_Items__c> toUpdateStatusList = new List<Warehouse_Product_Line_Items__c>();
-            for(Warehouse_Product_Line_Items__c curLineItem : [select id,Status__c from Warehouse_Product_Line_Items__c where Supply_Order_Line_Item__c IN : soLineItemsIDSet ]){
-                if(curLineItem.Status__c == 'Committed'){
+            for (Warehouse_Product_Line_Items__c curLineItem : [
+                SELECT Id, Status__c
+                FROM Warehouse_Product_Line_Items__c
+                WHERE Supply_Order_Line_Item__c IN :soLineItemsIDSet
+            ]) {
+                if (curLineItem.Status__c == 'Committed') {
                     curLineItem.Status__c = 'In Transit';
                     toUpdateStatusList.add(curLineItem);
                 }
-                
             }
-            
-            // Step 9: Update SO Status of Purchase_Order_Products
-            List<Purchase_Order_Product__c> updateStatusList = new List<Purchase_Order_Product__c>();
-            for (Purchase_Order_Product__c curPop : [
-                SELECT Id, SO_Status__c, Supplied_Quantity__c, Quantity__c
-                FROM Purchase_Order_Product__c
-                WHERE Id IN :poPOPIdSet
-            ]) {
-                if (curPop.Supplied_Quantity__c == curPop.Quantity__c) {
-                    curPop.SO_Status__c = 'SO Dispatched';
-                } else if (curPop.Supplied_Quantity__c != null && curPop.Supplied_Quantity__c > 0) {
-                    curPop.SO_Status__c = 'SO Partially Dispatched';
-                }
-                updateStatusList.add(curPop);
-            }
-            update updateStatusList;
-            
-            // Step 10: Update Purchase Order StageName
-            List<Purchase_Order__c> toUpdateStageNameList = new List<Purchase_Order__c>();
-            for (Purchase_Order__c curPO : [
-                SELECT Id, StageName__c, Total_Ordered_Quantity__c, Total_Supplied_Quantity__c
-                FROM Purchase_Order__c
-                WHERE Id IN :poIdSet
-            ]) {
-                Decimal total = curPO.Total_Ordered_Quantity__c == null ? 0 : curPO.Total_Ordered_Quantity__c;
-                Decimal supplied = curPO.Total_Supplied_Quantity__c == null ? 0 : curPO.Total_Supplied_Quantity__c;
-                
-                if (total > supplied) {
-                    curPO.StageName__c = 'SO Partially Dispatched';
-                } else if (total == supplied) {
-                    curPO.StageName__c = 'SO Completely Dispatched';
-                }
-                toUpdateStageNameList.add(curPO);
-            }
-            update toUpdateStageNameList;
             update toUpdateStatusList;
             
+            supplyOrder.isDCCreated__c = true;
+            update supplyOrder;
+            
+            if (!isManualSO) {
+                List<Purchase_Order_Product__c> POPs = [
+                    SELECT Id, Quantity__c, Supplied_Quantity__c, Zydus_Product__c
+                    FROM Purchase_Order_Product__c
+                    WHERE Purchase_Order__c = :supplyOrder.New_Purchase_Order__c
+                ];
+                
+                Map<Id, Purchase_Order_Product__c> productToPOPMap = new Map<Id, Purchase_Order_Product__c>();
+                Set<Id> popIdSet = new Set<Id>();
+                for (Purchase_Order_Product__c pop : POPs) {
+                    if (pop.Zydus_Product__c != null) {
+                        productToPOPMap.put(pop.Zydus_Product__c, pop);
+                        popIdSet.add(pop.Id);
+                    }
+                }
+                
+                List<Purchase_Order_Product__c> POPsToUpdate = new List<Purchase_Order_Product__c>();
+                Set<Id> updatedPopIds = new Set<Id>();
+                
+                for (Supply_Order_Line_Item__c soItem : soLineItems) {
+                    Purchase_Order_Product__c pop = productToPOPMap.get(soItem.Zydus_Product__c);
+                    if (pop != null && !updatedPopIds.contains(pop.Id)) {
+                        pop.Supplied_Quantity__c = (pop.Supplied_Quantity__c == null ? 0 : pop.Supplied_Quantity__c) + 1;
+                        POPsToUpdate.add(pop);
+                        updatedPopIds.add(pop.Id);
+                    }
+                }
+                
+                update POPsToUpdate;
+                
+                List<Purchase_Order_Product__c> updateStatusList = [
+                    SELECT Id, SO_Status__c, Supplied_Quantity__c, Quantity__c
+                    FROM Purchase_Order_Product__c
+                    WHERE Id IN :popIdSet
+                ];
+                
+                for (Purchase_Order_Product__c curPop : updateStatusList) {
+                    if (curPop.Supplied_Quantity__c == curPop.Quantity__c) {
+                        curPop.SO_Status__c = 'SO Dispatched';
+                    } else if (curPop.Supplied_Quantity__c != null && curPop.Supplied_Quantity__c > 0) {
+                        curPop.SO_Status__c = 'SO Partially Dispatched';
+                    }
+                }
+                update updateStatusList;
+            }
+            
             Delivery_Challan__c curDC = [
-                SELECT Id, Name, Supply_Order__c,
-                Supply_Order__r.Name,
-                Consignee_Distributor__c,
-                Consignee_Distributor__r.Business_Owner__c,
-                Consignee_Distributor__r.Business_Owner__r.Name,
-                Consignee_Distributor__r.Business_Owner__r.Email,
-                Consignor_Distributor__c,
-                Consignor_Distributor__r.Business_Owner__c,
-                Consignor_Distributor__r.Business_Owner__r.Name,
-                Consignor_Distributor__r.Business_Owner__r.Email,
-                Consignee_Hospital__c
+                SELECT Id, Name, Supply_Order__r.Name,
+                Consignee_Distributor__r.Business_Owner__c, Consignee_Distributor__r.Business_Owner__r.Email,
+                Consignor_Distributor__r.Business_Owner__c, Consignor_Distributor__r.Business_Owner__r.Email
                 FROM Delivery_Challan__c 
                 WHERE Id = :dc.Id
             ];
@@ -215,63 +203,38 @@ public without sharing class GenerateDeliveryChallan {
             Set<String> userIds = new Set<String>();
             List<String> emailAddresses = new List<String>();
             
-            List<User> sysAdmins = [
-                SELECT Id, Email 
-                FROM User 
-                WHERE Profile.Name = 'System Administrator' 
-                AND IsActive = true
-            ];
-            
-            for(User u:sysAdmins){
+            for (User u : [
+                SELECT Id, Email FROM User WHERE Profile.Name = 'System Administrator' AND IsActive = true
+            ]) {
                 userIds.add(u.Id);
-                emailAddresses.add(u.Email);
+                if (u.Email != null) emailAddresses.add(u.Email);
             }
             
-            if (curDC != null) {
-                // Consignee user
-                if (curDC.Consignee_Distributor__r.Business_Owner__c != null) {
-                    userIds.add(curDC.Consignee_Distributor__r.Business_Owner__c);
-                    if (curDC.Consignee_Distributor__r.Business_Owner__r.Email != null) {
-                        emailAddresses.add(curDC.Consignee_Distributor__r.Business_Owner__r.Email);
-                    }
-                }
-                
-                // Consignor user
-                if (curDC.Consignor_Distributor__r.Business_Owner__c != null) {
-                    userIds.add(curDC.Consignor_Distributor__r.Business_Owner__c);
-                    if (curDC.Consignor_Distributor__r.Business_Owner__r.Email != null) {
-                        emailAddresses.add(curDC.Consignor_Distributor__r.Business_Owner__r.Email);
-                    }
-                }
+            if (curDC.Consignee_Distributor__r?.Business_Owner__r?.Email != null) {
+                userIds.add(curDC.Consignee_Distributor__r.Business_Owner__c);
+                emailAddresses.add(curDC.Consignee_Distributor__r.Business_Owner__r.Email);
             }
             
-            if (!userIds.isEmpty()) {
-                String subject = 'New Delivery Challan Generated: ' + curDC.Name;
-                
-                String body = 'Dear User,\n\n'
-                    + 'A new Delivery Challan "' + curDC.Name + '" has been successfully created.\n\n'
-                    + 'Details:\n'
-                    + '- Generated By: ' + curDC.Consignor_Distributor__r.Business_Owner__r.Name + '\n'
-                    + '- Against Supply Order: ' + curDC.Supply_Order__r.Name + '\n\n'
-                    + 'Please review and proceed with the next steps.\n\n'
-                    + 'Best regards,\nZydus DMS Team';
-                
-                // Send Notification
-                NotificationService.notifyUsers(userIds, curDC.Id, subject, body);
-                
-                // Send Email
-                if (!emailAddresses.isEmpty()) {
-                    NotificationService.sendEmail(emailAddresses, subject, body);
-                }
+            if (curDC.Consignor_Distributor__r?.Business_Owner__r?.Email != null) {
+                userIds.add(curDC.Consignor_Distributor__r.Business_Owner__c);
+                emailAddresses.add(curDC.Consignor_Distributor__r.Business_Owner__r.Email);
             }
             
+            String subject = 'New Delivery Challan Generated: ' + curDC.Name;
+            String body = 'Dear User,\n\nA new Delivery Challan "' + curDC.Name + '" has been successfully created.\n\n'
+                + 'Against Supply Order: ' + curDC.Supply_Order__r.Name + '\n\n'
+                + 'Regards,\nZydus DMS Team';
             
-            return 'Delivery Challan created successfully!';
+            NotificationService.notifyUsers(userIds, curDC.Id, subject, body);
+            if (!emailAddresses.isEmpty()) {
+                NotificationService.sendEmail(emailAddresses, subject, body);
+            }
+            
+            return dc.Id;
         } catch (Exception ex) {
             return 'Error: ' + ex.getMessage();
         }
     }
-    
     @AuraEnabled
     public static Id createDCForHospital(String payload) {
         
@@ -476,6 +439,7 @@ public without sharing class GenerateDeliveryChallan {
         Set<String> userIds = new Set<String>();
         List<String> emailAddresses = new List<String>();
         
+        // Step 1: Add all System Administrators
         List<User> sysAdmins = [
             SELECT Id, Email 
             FROM User 
@@ -483,55 +447,62 @@ public without sharing class GenerateDeliveryChallan {
             AND IsActive = true
         ];
         
-        for(User u:sysAdmins){
+        for (User u : sysAdmins) {
             userIds.add(u.Id);
-            emailAddresses.add(u.Email);
+            if (u.Email != null) {
+                emailAddresses.add(u.Email);
+            }
         }
         
         if (curDC != null) {
-            // Consignee user
-            if (curDC.Consignee_Distributor__r.Business_Owner__c != null) {
+            // Step 2: Consignee Distributor's Business Owner
+            if (curDC.Consignee_Distributor__r != null && curDC.Consignee_Distributor__r.Business_Owner__c != null) {
                 userIds.add(curDC.Consignee_Distributor__r.Business_Owner__c);
                 if (curDC.Consignee_Distributor__r.Business_Owner__r.Email != null) {
                     emailAddresses.add(curDC.Consignee_Distributor__r.Business_Owner__r.Email);
                 }
             }
             
-            // Consignor user
-            if (curDC.Consignor_Distributor__r.Business_Owner__c != null) {
-                userIds.add(curDC.Consignor_Distributor__r.Business_Owner__c);
-                if (curDC.Consignor_Distributor__r.Business_Owner__r.Email != null) {
-                    emailAddresses.add(curDC.Consignor_Distributor__r.Business_Owner__r.Email);
+            // Step 3: Consignor (Parent of Consignor_Distributor__c)
+            if (curDC.Consignor_Distributor__c != null) {
+                Account parentAccount = AccountAccessUtil.getParentBusinessOwner(curDC.Consignor_Distributor__c);
+                if (parentAccount != null && parentAccount.Business_Owner__c != null) {
+                    userIds.add(parentAccount.Business_Owner__c);
+                    if (parentAccount.Business_Owner__r.Email != null) {
+                        emailAddresses.add(parentAccount.Business_Owner__r.Email);
+                    }
                 }
             }
             
-            if(curDC.Consignee_Hospital__r.CC_Email_Address__c!=null){
-                emailAddresses.add(curDC.Consignee_Hospital__r.CC_Email_Address__c);
-            }
-            
-            if(curDC.Consignee_Hospital__r.Contact_Email__c!=null){
-                emailAddresses.add(curDC.Consignee_Hospital__r.Contact_Email__c);
+            // Step 4: Consignee Hospital contact emails
+            if (curDC.Consignee_Hospital__r != null) {
+                if (curDC.Consignee_Hospital__r.Contact_Email__c != null) {
+                    emailAddresses.add(curDC.Consignee_Hospital__r.Contact_Email__c);
+                }
+                if (curDC.Consignee_Hospital__r.CC_Email_Address__c != null) {
+                    emailAddresses.add(curDC.Consignee_Hospital__r.CC_Email_Address__c);
+                }
             }
         }
         
+        // Step 5: Send notifications and emails
         if (!userIds.isEmpty()) {
             String subject = 'New Delivery Challan Generated: ' + curDC.Name;
             
             String body = 'Dear User,\n\n'
                 + 'A new Delivery Challan "' + curDC.Name + '" has been successfully created.\n\n'
                 + 'Details:\n'
-                + '- Generated By: ' + curDC.Consignor_Distributor__r.Business_Owner__r.Name + '\n'
+                + '- Generated By: ' + (curDC.Consignor_Distributor__r != null && curDC.Consignor_Distributor__r.Business_Owner__r != null ? curDC.Consignor_Distributor__r.Business_Owner__r.Name : 'System') + '\n'
                 + 'Please review and proceed with the next steps.\n\n'
                 + 'Best regards,\nZydus DMS Team';
             
-            // Send Notification
             NotificationService.notifyUsers(userIds, curDC.Id, subject, body);
             
-            // Send Email
             if (!emailAddresses.isEmpty()) {
                 NotificationService.sendEmail(emailAddresses, subject, body);
             }
         }
+        
         return dc.Id;
     }
     
