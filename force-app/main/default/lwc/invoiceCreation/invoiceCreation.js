@@ -1,6 +1,7 @@
 import { LightningElement, track, wire } from 'lwc';
 import getUserAccountsAndHospitals from '@salesforce/apex/InvoiceCreationController.getUserAccountsAndHospitals';
 import getWarehouseProductLineItems from '@salesforce/apex/InvoiceCreationController.getWarehouseProductLineItems';
+import getWarehouseProductLineItemsBySerialNumber from '@salesforce/apex/InvoiceCreationController.getWarehouseProductLineItemsBySerialNumber';
 import saveInvoice from '@salesforce/apex/InvoiceCreationController.saveInvoice';
 import existingDoctor from '@salesforce/apex/InvoiceCreationController.existingDoctor';
 import RelatedDCToHosp from '@salesforce/apex/InvoiceCreationController.RelatedDCToHosp';
@@ -9,13 +10,14 @@ import getCreditNoteOptions from '@salesforce/apex/InvoiceCreationController.get
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getSubChannelPartnerOptions from '@salesforce/apex/InvoiceCreationController.getSubChannelPartnerOptions';
 import getDeliveryChallanForChannelPartner from '@salesforce/apex/InvoiceCreationController.getDeliveryChallanForChannelPartner';
-import getInvoiceData from '@salesforce/apex/InvoiceCreationController.getInvoiceData';
 import getInvoices from '@salesforce/apex/InvoiceCreationController.getInvoices';
 import getChannelPartnerLineItems from '@salesforce/apex/InvoiceCreationController.getChannelPartnerLineItems';
+import getChannelPartnerLineItemsBySerialNumber from '@salesforce/apex/InvoiceCreationController.getChannelPartnerLineItemsBySerialNumber';
 import saveInvoiceCP from '@salesforce/apex/InvoiceCreationController.saveInvoiceCP';
 import getPaymentModePicklistValues from '@salesforce/apex/InvoiceCreationController.getPaymentModePicklistValues';
 import existingCATHNumber from '@salesforce/apex/InvoiceCreationController.existingCATHNumber';
 import { NavigationMixin } from 'lightning/navigation';
+const SERIAL_NUMBER_LENGTH = 15;
 export default class InvoiceCreation extends NavigationMixin(LightningElement) {
     @track accountOptions = [];
     @track deliveryChallanOptions = [];
@@ -45,7 +47,7 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
     timeoutId;
     @track selectedScheme = null;
     @track creditNote;
-    @track uploadedFileName = '';
+    @track uploadedFiles;
     @track patient = { firstName: '', lastName: '', age: '', gender: '' };
     @track selectedInvoiceCreationType = false;
     @track isChannelPartnerMode = false;
@@ -71,7 +73,27 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
     @track cathSuggestions = [];
     @track selectedSchemeName = '';
     @track isHospitalMode = false;
-
+    @track invoiceLable = 'Create Invoice';
+    @track invoiceLableCP = 'Create Invoice';
+    @track showMainRadioBtns = true;
+    @track selectedOption;
+    @track showInvoiceFromDC = false;
+    @track showInvoiceByScan = false;
+    @track patientFirstName;
+    @track patientLastName;
+    @track patientAge;
+    @track patientRegisterNumber;
+    @track cathNumber;
+    @track ipNumber;
+    @track doctorName;
+    @track showPatientDetail = false;
+    @track patientGender;
+    @track implantDate;
+    @track hospitalAray = [];
+    @track distributorList = [];
+    @track selectedHospital;
+    disableCreateInvoiceBtn;
+    showBackBtn = false;
     blurTimeout
     genderOptions = [
         { label: 'Male', value: 'Male' },
@@ -81,12 +103,63 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
         { label: 'Hospital Invoice', value: 'hospital' },
         { label: 'Channel Partner Invoice', value: 'channelPartner' }
     ]
+    radioOptions = [
+        { label: 'Create from Delivery Challan', value: 'createFromDC' },
+        { label: 'Create by Item Scan', value: 'createByItemScan' }
+    ]
+
+    handleRadioChange(event) {
+        this.selectedInvoiceCreationType = false;
+        this.selectedOption = event.detail.value;
+        this.isHospitalMode = false;
+        this.isChannelPartnerMode = false;
+        if (this.selectedOption === 'createFromDC') {
+            this.showInvoiceFromDC = true;
+            this.showMainRadioBtns = false;
+        } else if (this.selectedOption === 'createByItemScan') {
+            this.showInvoiceByScan = true;
+            this.showMainRadioBtns = false;
+        }
+        this.showBackBtn = true;
+    }
+
+    handleBack() {
+        this.selectedOption = '';
+        this.selectedChannelPartner='';
+        this.deliveryChallanId='';
+        this.deliveryChallanOptions=[];
+        this.selectedHospital='';
+        this.selectedHospitalId='';
+        this.channelPartnerDeliveryChallanOptions=[];
+        this.warehouseLineItemOptionsCP=[];
+        this.warehouseLineItem=[];
+        this.selectedChannelPartnerName='';
+        this.showMainRadioBtns = true;
+        this.showInvoiceFromDC = false;
+        this.showInvoiceByScan = false;
+        this.showBackBtn = false;
+        this.resetFields()
+    }
+
+    resetFields() {
+        this.selectedInvoice = '';
+        this.selectedDeliveryChallan = '';
+        this.selectedChannelPartner = '';
+        this.warehouseLineItemOptions = [];
+        this.warehouseLineItems = [];
+        this.warehouseLineItemOptionsCP = [];
+    }
 
 
     handleInvoiceCreationTypeChange(event) {
+
         this.selectedInvoiceCreationType = event.detail.value;
         this.isHospitalMode = this.selectedInvoiceCreationType === 'hospital';
         this.isChannelPartnerMode = this.selectedInvoiceCreationType === 'channelPartner';
+        setTimeout(() => {
+            this.warehouseLineItemOptionsCP = [];
+            this.warehouseLineItemOptions = [];
+        }, 0);
     }
 
     @wire(getScheme)
@@ -155,7 +228,7 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                 value: acc.Id
             }));
 
-            this.hospitalOptions = Object.entries(data.hospitals).map(([id, name]) => ({
+            this.hospitalAray = Object.entries(data.hospitals).map(([id, name]) => ({
                 label: name,
                 value: id
             }));
@@ -168,6 +241,24 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
         this.isLoaded = false;
     }
 
+    get showHospitalDropdown() {
+        return this.hospitalOptions.length > 0;
+    }
+    handleHospFocus() {
+        this.hospitalOptions = [...this.hospitalAray];
+    }
+    handleHospBlur() {
+        setTimeout(() => {
+            this.hospitalOptions = [];
+        }, 300);
+    }
+    handleHospitalInput(event) {
+        const hosp = event.target.value;
+        this.hospitalOptions = this.hospitalAray.filter(item =>
+            item.label.toLowerCase().includes(hosp.toLowerCase())
+        );
+    }
+
     handleInvoiceTypeChange(event) {
         this.selectedInvoiceType = event.detail.value;
     }
@@ -176,14 +267,22 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
     }
 
     handleHospitalChange(event) {
-        this.selectedHospitalId = event.detail.value;
+        this.selectedHospital = event.currentTarget.dataset.value;
+        this.selectedHospitalId = event.currentTarget.dataset.id;
+
+        console.log('this.selectedHospital:', this.selectedHospital);
+        console.log('this.selectedHospitalId:', this.selectedHospitalId);
+
         this.selectedLineItemIds = [];
+        this.warehouseLineItems = [];
+        this.hospitalOptions = [];
         this.fetchDeliveryChallan();
     }
 
     fetchDeliveryChallan() {
         RelatedDCToHosp({ HospId: this.selectedHospitalId })
             .then(result => {
+                console.log('result: ', result);
                 this.deliveryChallanOptions = Object.entries(result.relatedDCs || {}).map(([key, value]) => ({
                     label: value,
                     value: key
@@ -234,13 +333,18 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
     }
 
     handleUploadFinished(event) {
-        this.uploadedFileIds = event.detail.files;
-        if (this.uploadedFileIds.length > 0) {
-            this.uploadedFileId = uploadedFiles[0].documentId;
-            this.uploadedFileName = uploadedFiles[0].name;
-        }
+        const uploadedFiles = event.detail.files;
+        this.uploadedFileIds = uploadedFiles.map(file => file.documentId);
+        this.uploadedFiles = uploadedFiles.map(file => ({
+            name: file.name,
+            documentId: file.documentId
+        }));
     }
 
+    handleDeleteFile(event) {
+        const fileIdToDelete = event.currentTarget.dataset.id;
+        this.uploadedFiles = this.uploadedFiles.filter(file => file.documentId !== fileIdToDelete);
+    }
 
     handleInputChange(event) {
         const field = event.target.name;
@@ -361,6 +465,13 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             }, true);
 
         if (!allValid) {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Validation Error',
+                    message: 'Please fill all required fields correctly.',
+                    variant: 'error'
+                })
+            );
             return;
         }
 
@@ -371,6 +482,8 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                 SGST: item.discountedSGST !== undefined ? item.discountedSGST : item.cgst || 0,
                 CGST: item.discountedCGST !== undefined ? item.discountedCGST : item.sgst || 0,
                 IGST: item.discountedIGST !== undefined ? item.discountedIGST : item.igst || 0,
+                dcLineItem: item.record?.Delivery_Challan_Line_Item__c || null,
+                dc: item.record?.Delivery_Challan_Line_Item__r?.Delivery_Challan__c || null,
                 netAmount: (item.discountedNetAmount !== undefined ? item.discountedNetAmount : item.netAmount) - (item.record?.Delivery_Challan_Line_Item__r?.Zydus_Price_Book_Entry__r?.Bill_Discount_Amount__c || 0),
                 scheme: item.selectedSchemeName,
                 billDiscountAmount: item.record?.Delivery_Challan_Line_Item__r?.Zydus_Price_Book_Entry__r?.Bill_Discount_Amount__c || 0
@@ -385,7 +498,7 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             return;
         }
 
-        console.log('selectedLineItems',JSON.stringify(selectedLineItems));
+        console.log('selectedLineItems', JSON.stringify(selectedLineItems));
 
         const invoiceData = {
             patient: this.patient,
@@ -405,6 +518,8 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             creditNote: this.creditNote
         };
 
+        this.invoiceLable = 'Creating Invoice...';
+        this.disableCreateInvoiceBtn = true;
         console.log('invoiceData', invoiceData);
 
         saveInvoice({ invoiceData: JSON.stringify(invoiceData) })
@@ -415,7 +530,7 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                     variant: 'success'
                 }));
                 this.isHospitalMode = false;
-                 this[NavigationMixin.Navigate]({
+                this[NavigationMixin.Navigate]({
                     type: 'standard__recordPage',
                     attributes: {
                         recordId: result,
@@ -431,6 +546,9 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                     message: 'Failed to save invoice. ' + (error.body?.message || ''),
                     variant: 'error'
                 }));
+            }).finally(() => {
+                this.invoiceLable = 'Create Invoice';
+                this.disableCreateInvoiceBtn = false;
             });
     }
 
@@ -438,26 +556,53 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
         return !this.selectedHospitalId;
     }
 
+
     get warehouseLineItemOptions() {
-        return this.warehouseLineItems.map(item => ({
-            Id: item.record.Id,
-            Serial_Number__c: item.record.Serial_Number__c || 'Unnamed',
-            Status__c: item.record.Status__c,
-            Condition__c: item.record.Condition__c,
-            Supplied_Date__c: item.record.Supplied_Date__c,
-            ProductName: item.record.Warehouse__r?.Zydus_Product__r?.Name || 'Unknown',
-            DC: item.record.GRN__r?.Delivery_Challan__r?.Name || 'Unknown',
-            SGST: item.discountedSGST !== undefined ? item.discountedSGST : item.cgst || 0,
-            CGST: item.discountedCGST !== undefined ? item.discountedCGST : item.sgst || 0,
-            IGST: item.discountedIGST !== undefined ? item.discountedIGST : item.igst || 0,
-            billDiscountAmount: item.record?.Delivery_Challan_Line_Item__r?.Zydus_Price_Book_Entry__r?.Bill_Discount_Amount__c || 0,
-            orginalNetAmount: item.netAmount,
-            netAmount: (item.discountedNetAmount !== undefined ? item.discountedNetAmount : item.netAmount) - (item.record?.Delivery_Challan_Line_Item__r?.Zydus_Price_Book_Entry__r?.Bill_Discount_Amount__c || 0),
-            isSelected: item.isSelected,
-            selectedScheme: item.selectedScheme,
-            discount: item.discount || 0,
-            selectedSchemeName: item.selectedSchemeName
-        }));
+        return this.warehouseLineItems.map(item => {
+            const rec = item.record;
+            const dcLineItem = rec.Delivery_Challan_Line_Item__r || {};
+            const pbEntry = dcLineItem.Zydus_Price_Book_Entry__r || {};
+
+            const unitPrice = pbEntry.Unit_Price__c || 0;
+            const billDiscount = pbEntry.Bill_Discount_Amount__c || 0;
+            const baseNet = item.netAmount || 0;
+            const creditNoteAmount = pbEntry.Credit_Note_Amount__c || 0;
+
+            const SGST = item.discountedSGST != null ? item.discountedSGST : (item.cgst || 0);
+            const CGST = item.discountedCGST != null ? item.discountedCGST : (item.sgst || 0);
+            const IGST = item.discountedIGST != null ? item.discountedIGST : (item.igst || 0);
+
+            const orignialTaxablePrice = unitPrice - billDiscount;
+            const taxablePrice = item.discountedTaxablePrice != null
+                ? item.discountedTaxablePrice
+                : orignialTaxablePrice;
+            const netAmount = (item.discountedNetAmount != null ? item.discountedNetAmount : baseNet)
+                - billDiscount;
+
+            return {
+                Id: rec.Id,
+                Serial_Number__c: rec.Serial_Number__c || 'Unnamed',
+                Status__c: rec.Status__c,
+                Condition__c: rec.Condition__c,
+                Supplied_Date__c: rec.Supplied_Date__c,
+                ProductName: rec.Warehouse__r?.Zydus_Product__r?.Name || 'Unknown',
+                DC: dcLineItem.Name || 'Unknown',
+                SGST,
+                CGST,
+                IGST,
+                unitPrice,
+                billDiscountAmount: billDiscount,
+                creditNoteAmount: creditNoteAmount,
+                orginalNetAmount: baseNet,
+                orignialTaxablePrice,
+                taxablePrice,
+                netAmount,
+                isSelected: item.isSelected || false,
+                selectedScheme: item.selectedScheme || null,
+                discount: item.discount || 0,
+                selectedSchemeName: item.selectedSchemeName || null
+            };
+        });
     }
 
     get showNoMatch() {
@@ -503,13 +648,25 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
         this.warehouseLineItems = this.warehouseLineItems.map(item => {
             if (!item.isSelected) return item;
 
-            const basic = item?.record?.Unit_Price__c;
+            const rec = item.record;
+            const dcLineItem = rec.Delivery_Challan_Line_Item__r || {};
+            const pbEntry = dcLineItem.Zydus_Price_Book_Entry__r || {};
+
+            const unitPrice = pbEntry.Unit_Price__c || 0;
+            const billDiscount = pbEntry.Bill_Discount_Amount__c || 0;
+
+            const basic = unitPrice;
             const discountedBasic = basic * factor;
 
-            const newCGST = +(discountedBasic * (item.cgst / basic) || 0).toFixed(2);
-            const newSGST = +(discountedBasic * (item.sgst / basic) || 0).toFixed(2);
-            const newIGST = +(discountedBasic * (item.igst / basic) || 0).toFixed(2);
-            const newNet = +(discountedBasic + newCGST + newSGST + newIGST).toFixed(2);
+            const taxablePrice = factor * (unitPrice - billDiscount);
+            const newCGST = +(taxablePrice * (item.cgst / basic) || 0).toFixed(2);
+            const newSGST = +(taxablePrice * (item.sgst / basic) || 0).toFixed(2);
+            const newIGST = +(taxablePrice * (item.igst / basic) || 0).toFixed(2);
+            const newNet = +(taxablePrice + newCGST + newSGST + newIGST).toFixed(2);
+
+            console.log('item.cgst:' + item.cgst);
+            console.log('basic:' + basic);
+            console.log('newCGST:' + newCGST);
 
             return {
                 ...item,
@@ -519,6 +676,7 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                 discountedSGST: newSGST,
                 discountedIGST: newIGST,
                 discountedNetAmount: newNet,
+                discountedTaxablePrice: taxablePrice,
                 discount
             };
         });
@@ -537,13 +695,38 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             console.error('Error fetching channel partners', error);
         }
     }
+    get showDistributorDropdown() {
+        return this.distributorList.length > 0;
+    }
 
+      handleDistFocus() {
+        this.distributorList = [...this.channelPartnerOptions];
+        this._isDropdownOpen = true; // Open the dropdown
+    }
+
+    handleDistBlur() {
+        setTimeout(() => {
+            this.distributorList = [];
+            this._isDropdownOpen = false; // Close the dropdown
+        }, 300);
+    }
+
+    get comboboxClasses() {
+        let classes = 'slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click';
+        if (this._isDropdownOpen) {
+            classes += ' slds-is-open';
+        }
+        return classes;
+    }
+
+
+    @track selectedChannelPartnerName;
     handleChannelPartnerSelect(event) {
-        this.selectedChannelPartner = event.detail.value;
+        this.selectedChannelPartnerName = event.currentTarget.dataset.value;
+        this.selectedChannelPartner = event.currentTarget.dataset.id;
 
         getDeliveryChallanForChannelPartner({ Id: this.selectedChannelPartner })
             .then(result => {
-                console.log('Delivery Challans for Channel Partner:', result);
                 this.channelPartnerDeliveryChallanOptions = result.map(dc => ({
                     label: dc.Name,
                     value: dc.Id
@@ -564,9 +747,17 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             });
     }
 
+    handleChannelPartnerChange(event) {
+        const dist = event.target.value;
+        this.distributorList = this.channelPartnerOptions.filter(item =>
+            item.label.toLowerCase().includes(dist.toLowerCase())
+        );
+    }
+
     handleChannelPartnerDeliveryChallanChange(event) {
+        this.warehouseLineItemOptionsCP = [];
         this.selectedDeliveryChallan = event.detail.value;
-        
+
         getInvoices({ childAccountId: this.selectedChannelPartner, relavantDCId: this.selectedDeliveryChallan })
             .then(data => {
                 console.log('Invoices:', data);
@@ -578,39 +769,20 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             .catch(error => {
                 console.error('Error fetching invoices', error);
                 this.showComponent = false;
-                this.errorMessage = 'Failed to load Invoices. Please try again.';
+                this.errorMessage = 'Failed to load Invoices. Please try again after reload the page.';
             });
     }
 
     handleInvoiceChange(event) {
+        this.warehouseLineItemOptionsCP = [];
         this.selectedInvoice = event.detail.value;
-
-        getInvoiceData({ invoiceId: this.selectedInvoice })
-
-            .then(data => {
-                if (data) {
-                    console.log('Invoice Data: ', data);
-                    this.patientFirstNameCP = data.Patient_First_Name__c;
-                    this.patientLastNameCP = data.Patient_Last_Name__c;
-                    this.patientAgeCP = data.Patient_Age__c;
-                    this.patientGenderCP = data.Patient_Gender__c;
-                    this.comment = data.Comment_Remark__c;
-                    this.doctorInputCP = data.Doctor_Name__c;
-                    this.ipNumberCP = data.IP_Number__c;
-                    this.cathNumberCP = data.CATH_Number__c;
-                    this.implantDateCP = data.Date_of_Implant__c;
-                    this.invoiceType = data.Invoice_Type__c;
-                    this.patientRegisterNumberCP = data.Patient_Register_Number__c;
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching invoice data:', error);
-            });
+        this.fetchCPLineItems(this.selectedDeliveryChallan);
     }
 
     connectedCallback() {
         this.loadPaymentModes();
     }
+
 
     loadPaymentModes() {
         getPaymentModePicklistValues()
@@ -625,18 +797,23 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             });
     }
 
-    handlePaymentModeChange(event) {
-        this.paymentMode = event.detail.value;
-        console.log('Selected Payment Mode:', this.paymentMode);
-        this.fetchCPLineItems(this.selectedDeliveryChallan);
-    }
-
     fetchCPLineItems(dcId) {
         console.log('dcId', dcId);
-        getChannelPartnerLineItems({ dcId: dcId , invoiceId: this.selectedInvoice})
+        getChannelPartnerLineItems({ dcId: dcId, invoiceId: this.selectedInvoice })
             .then(result => {
                 console.log('Line Items:', result);
-                this.warehouseLineItemOptionsCP = result.map(item => {
+                const filteredResult = result.filter(item => item.productName && item.productName.trim() !== '');
+                if (filteredResult.length === 0) {
+                    this.dispatchEvent(
+                        new ShowToastEvent({
+                            title: 'No line items found',
+                            message: 'No items found associated with this delivery challan',
+                            variant: 'warning'
+                        })
+                    )
+                    return;
+                }
+                this.warehouseLineItemOptionsCP = filteredResult.map(item => {
                     const sgst = Number(item.sgst) || 0;
                     const cgst = Number(item.cgst) || 0;
                     const igst = Number(item.igst) || 0;
@@ -645,6 +822,7 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
 
                     return {
                         id: item.Id,
+                        dcliId: item.dcliId || '',
                         serialNumber: item.serialNumber || '',
                         dcName: item.dcName || '',
                         productName: item.productName || '',
@@ -652,16 +830,29 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                         condition: item.condition || '',
                         suppliedDate: item.suppliedDate || '',
                         billDiscountAmount: billDiscountAmount,
+                        unitPrice: item.unitPrice || 0,
+                        creditNoteAmount: item.creditNoteAmount,
                         SGST: sgst,
                         CGST: cgst,
                         IGST: igst,
-                        netAmount: netAmount-billDiscountAmount,
+                        netAmount: netAmount - billDiscountAmount,
                         originalSGST: sgst,
                         originalCGST: cgst,
                         originalIGST: igst,
                         originalNetAmount: netAmount,
+                        orignialTaxablePrice: item.unitPrice - billDiscountAmount,
                         selectedSchemeDiscount: item.selectedSchemeDiscount || 0,
-                        isSelected: true
+                        taxablePrice: item.discountedTaxablePrice !== undefined ? item.discountedTaxablePrice : item.unitPrice - billDiscountAmount,
+                        isSelected: true,
+                        patientFirstName: item.patientFirstName,
+                        patientLastName: item.patientLastName,
+                        patientAge: item.patientAge,
+                        patientRegisterNumber: item.patientRegisterNumber,
+                        ipNumber: item.ipNumber,
+                        cathNumber: item.cathNumber,
+                        doctorName: item.doctorName,
+                        patientGender: item.patientGender,
+                        implantDate: item.implantDate
                     };
                 });
             })
@@ -669,8 +860,6 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                 console.error('Error fetching line items:', error);
             });
     }
-
-
     get isAllSelectedCP() {
         return this.warehouseLineItemOptionsCP.length > 0 && this.warehouseLineItemOptionsCP.every(item => item.isSelected);
     }
@@ -719,6 +908,8 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             const baseIGST = item.originalIGST || 0;
             const baseNet = item.originalNetAmount || 0;
 
+            const discountedTaxablePrice = factor * (item.unitPrice - billDiscountAmount);
+
             const basicAmount = baseNet - (baseSGST + baseCGST + baseIGST);
             const discountedBasic = +(basicAmount * factor).toFixed(2);
 
@@ -726,20 +917,22 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             const cgstRate = baseCGST / basicAmount || 0;
             const igstRate = baseIGST / basicAmount || 0;
 
-            const newSGST = +(discountedBasic * sgstRate).toFixed(2);
-            const newCGST = +(discountedBasic * cgstRate).toFixed(2);
-            const newIGST = +(discountedBasic * igstRate).toFixed(2);
-            const newNet = +(discountedBasic + newSGST + newCGST + newIGST - billDiscountAmount).toFixed(2);
+            const newSGST = +(discountedTaxablePrice * sgstRate).toFixed(2);
+            const newCGST = +(discountedTaxablePrice * cgstRate).toFixed(2);
+            const newIGST = +(discountedTaxablePrice * igstRate).toFixed(2);
+            const newNet = +(discountedTaxablePrice + newSGST + newCGST + newIGST).toFixed(2);
 
             return {
                 ...item,
                 selectedScheme: this.selectedScheme,
                 selectedSchemeName: this.selectedSchemeName,
                 selectedSchemeDiscount: discount,
+                taxablePrice: +discountedTaxablePrice.toFixed(2),
                 SGST: newSGST,
                 CGST: newCGST,
                 IGST: newIGST,
-                netAmount: newNet
+                netAmount: newNet,
+                discountedTaxablePrice: discountedTaxablePrice
             };
         });
     }
@@ -786,6 +979,13 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
             }, true);
 
         if (!allValid) {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Validation Error',
+                    message: 'Please fill all required fields correctly.',
+                    variant: 'error'
+                })
+            );
             return;
         }
 
@@ -798,7 +998,17 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                 CGST: item.CGST || 0,
                 IGST: item.IGST || 0,
                 netAmount: item.netAmount || 0,
-                billDiscountAmount: item.billDiscountAmount || 0
+                billDiscountAmount: item.billDiscountAmount || 0,
+                patientFirstName: item.patientFirstName,
+                patientLastName: item.patientLastName,
+                patientAge: item.patientAge,
+                patientRegisterNumber: item.patientRegisterNumber,
+                ipNumber: item.ipNumber,
+                cathNumber: item.cathNumber,
+                doctorName: item.doctorName,
+                patientGender: item.patientGender,
+                implantDate: item.implantDate,
+                dcliId: item.dcliId
             }));
 
         if (selectedLineItems.length === 0) {
@@ -813,23 +1023,16 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
         }
 
         const invoiceDataCP = {
-            paymentMode: this.paymentMode,
-            implantDateCP: this.implantDateCP,
-            ipNumberCP: this.ipNumberCP,
-            cathNumberCP: this.cathNumberCP,
-            patientFirstNameCP: this.patientFirstNameCP,
-            patientLastNameCP: this.patientLastNameCP,
-            patientAgeCP: this.patientAgeCP,
-            patientRegisterNumberCP: this.patientRegisterNumberCP,
-            patientGenderCP: this.patientGenderCP,
-            doctorInputCP: this.doctorInputCP,
-            comment:this.comment,
+            comment: this.comment,
             invoiceType: this.selectedInvoiceType,
             selectedChannelPartner: this.selectedChannelPartner,
             selectedDeliveryChallan: this.selectedDeliveryChallan,
+            invoiceCreationType: this.showInvoiceByScan,
             lineItemIds: selectedLineItems,
             creditNoteId: this.selectedCreditNotes.length > 0 ? this.selectedCreditNotes.map(note => note.value) : null
         };
+        this.invoiceLableCP = 'Creating Invoice...';
+        this.disableCreateInvoiceBtn = true;
         console.log('invoice data CP is ', invoiceDataCP);
         saveInvoiceCP({ invoiceDataCP: JSON.stringify(invoiceDataCP), selectedInvoice: this.selectedInvoice })
             .then(result => {
@@ -864,6 +1067,213 @@ export default class InvoiceCreation extends NavigationMixin(LightningElement) {
                 this.isChannelPartnerMode = false;
                 console.error('Error creating invoice:', error);
                 this.showErrorModal = true;
+            }).finally(() => {
+                this.invoiceLableCP = 'Create Invoice';
+                this.disableCreateInvoiceBtn = false;
             });
+    }
+
+    get snScanPlaceholder() {
+        return `Scan Serial Number (${SERIAL_NUMBER_LENGTH} characters)`
+    }
+
+    get serialNumberDisable() {
+        return this.selectedHospitalId ? false : true;
+    }
+    get serialNumberDisableCP() {
+        return this.selectedChannelPartner ? false : true;
+    }
+    handleScan(event) {
+        const serialNumber = event.target.value;
+
+        if (serialNumber && serialNumber.length === SERIAL_NUMBER_LENGTH) {
+
+            console.log('this.warehouseLineItem', this.warehouseLineItems);
+            const isDuplicate = this.warehouseLineItems.some(item => item.record.Serial_Number__c === serialNumber);
+
+            console.log('IsDuplicate: ', isDuplicate)
+            if (isDuplicate) {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Duplicate Detected',
+                        message: `Serial number ${serialNumber} has already been scanned`,
+                        variant: 'warning'
+                    }));
+                event.target.value = '';
+                return;
+            }
+
+            getWarehouseProductLineItemsBySerialNumber({ hospitalId: this.selectedHospitalId, serialNumber: serialNumber })
+                .then(wrapperList => {
+                    if (wrapperList && wrapperList.length > 0) {
+                        const newItems = wrapperList.map(wrapper => ({
+                            ...wrapper,
+                            isSelected: false,
+                            selectedScheme: null,
+                            selectedSchemeName: null
+                        }));
+
+                        this.warehouseLineItems = [...this.warehouseLineItems, ...newItems];
+
+                        this.dispatchEvent(
+                            new ShowToastEvent({
+                                title: 'Success',
+                                message: `Serial number ${serialNumber} has been scanned successfully.`,
+                                variant: 'success'
+                            }));
+                        event.target.value = '';
+                    } else {
+                        this.dispatchEvent(
+                            new ShowToastEvent({
+                                title: 'Error',
+                                message: `The serial number ${serialNumber} could not be found or is invalid`,
+                                variant: 'error'
+                            }));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching warehouse product line items', error);
+                    this.dispatchEvent(
+                        new ShowToastEvent({
+                            title: 'Error',
+                            message: error.body ? error.body.message : 'An unknown error occurred.',
+                            variant: 'error'
+                        }));
+                })
+                .finally(() => {
+                    event.target.value = '';
+                });
+        }
+    }
+    handleScanCP(event) {
+        const serialNumber = event.target.value;
+        const inputElement = event.target;
+
+        if (serialNumber && serialNumber.length === SERIAL_NUMBER_LENGTH) {
+
+            const isDuplicate = this.warehouseLineItemOptionsCP.some(item => item.serialNumber === serialNumber);
+
+            if (isDuplicate) {
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Duplicate Detected',
+                        message: `Serial number ${serialNumber} has already been scanned`,
+                        variant: 'warning'
+                    })
+                );
+                inputElement.value = '';
+                event.target.value='';
+                return;
+            }
+
+            getChannelPartnerLineItemsBySerialNumber({ consigneeId: this.selectedChannelPartner, serialNumber: serialNumber })
+                .then(wrapperList => {
+                    if (wrapperList && wrapperList.length > 0) {
+                        console.log('wrapperList: ', wrapperList);
+                        const newItem = wrapperList.map(item => {
+                            const sgst = Number(item.sgst) || 0;
+                            const cgst = Number(item.cgst) || 0;
+                            const igst = Number(item.igst) || 0;
+                            const netAmount = Number(item.netAmount) || 0;
+                            const billDiscountAmount = Number(item.billDiscountAmount) || 0;
+
+
+                            return {
+                                id: item.Id,
+                                serialNumber: item.serialNumber || '',
+                                dcName: item.dcName || '',
+                                dcliId: item.dcliId || '',
+                                productName: item.productName || '',
+                                status: item.status || '',
+                                condition: item.condition || '',
+                                suppliedDate: item.suppliedDate || '',
+                                billDiscountAmount: billDiscountAmount,
+                                unitPrice: item.unitPrice || 0,
+                                creditNoteAmount: item.creditNoteAmount,
+                                SGST: sgst,
+                                CGST: cgst,
+                                IGST: igst,
+                                netAmount: netAmount - billDiscountAmount,
+                                originalSGST: sgst,
+                                originalCGST: cgst,
+                                originalIGST: igst,
+                                originalNetAmount: netAmount,
+                                orignialTaxablePrice: item.unitPrice - billDiscountAmount,
+                                selectedSchemeDiscount: item.selectedSchemeDiscount || 0,
+                                taxablePrice: item.discountedTaxablePrice !== undefined ? item.discountedTaxablePrice : item.unitPrice - billDiscountAmount,
+                                isSelected: true,
+                                patientFirstName: item.patientFirstName,
+                                patientLastName: item.patientLastName,
+                                patientAge: item.patientAge,
+                                patientRegisterNumber: item.patientRegisterNumber,
+                                ipNumber: item.ipNumber,
+                                cathNumber: item.cathNumber,
+                                doctorName: item.doctorName,
+                                patientGender: item.patientGender,
+                                implantDate: item.implantDate
+                            };
+                        }
+                        );
+                        this.warehouseLineItemOptionsCP = [...this.warehouseLineItemOptionsCP, ...newItem];
+
+                        this.dispatchEvent(
+                            new ShowToastEvent({
+                                title: 'Success',
+                                message: `Serial number ${serialNumber} has been scanned successfully.`,
+                                variant: 'success'
+                            })
+                        );
+                    } else {
+                        this.dispatchEvent(
+                            new ShowToastEvent({
+                                title: 'Error',
+                                message: `The serial number ${serialNumber} could not be found or is invalid`,
+                                variant: 'error'
+                            })
+                        );
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching warehouse product line items', error);
+                    this.dispatchEvent(
+                        new ShowToastEvent({
+                            title: 'Error',
+                            message: error.body ? error.body.message : 'An unknown error occurred.',
+                            variant: 'error'
+                        })
+                    );
+                })
+                .finally(() => {
+                    event.target.value='';
+                    if (inputElement) {
+                        inputElement.value = '';
+                    }
+                });
+        }
+    }
+    get patientFullName() {
+        return `${this.patientFirstName || ''} ${this.patientLastName || ''}`.trim();
+    }
+    handleViewPatientDetails(event) {
+        const serialNumber = event.target.dataset.serial;
+        const foundItem = this.warehouseLineItemOptionsCP.find(item => item.serialNumber === serialNumber);
+        console.log('foundItem: ', foundItem);
+        if (foundItem) {
+            this.patientFirstName = foundItem.patientFirstName;
+            this.patientLastName = foundItem.patientLastName;
+            this.patientAge = foundItem.patientAge;
+            this.patientRegisterNumber = foundItem.patientRegisterNumber;
+            this.ipNumber = foundItem.ipNumber;
+            this.cathNumber = foundItem.cathNumber;
+            this.doctorName = foundItem.doctorName;
+            this.patientGender = foundItem.patientGender;
+            this.implantDate = foundItem.implantDate;
+
+            this.showPatientDetail = true;
+        }
+    }
+
+    handleClose() {
+        this.showPatientDetail = false;
     }
 }

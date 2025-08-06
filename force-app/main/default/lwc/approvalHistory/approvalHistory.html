@@ -1,0 +1,409 @@
+<template>
+    <div class="slds-p-around_medium">
+        <lightning-accordion allow-multiple-sections-open active-section-name={activeSections}>
+            <!-- Approval History Section -->
+            <lightning-accordion-section name="approvalHistory" label="Onboarding Requests Report">
+                <div class="slds-m-bottom_small slds-grid slds-grid_align-spread slds-gutters">
+                    <div class="slds-col">
+                        <lightning-combobox name="category" label="Select Category" value={category}
+                            options={categoryOptions} onchange={handleCategoryChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col">
+                        <lightning-button label={materialHistoryLabel} icon-name="utility:download"
+                            icon-position="right" onclick={exportApprovalHistory} disabled={materialHistoryBtnDisable}>
+                        </lightning-button>
+                    </div>
+                </div>
+
+                <template if:true={data}>
+                    <lightning-datatable key-field="id" data={data} columns={columns} hide-checkbox-column="true"></lightning-datatable>
+                </template>
+
+                <template if:true={error}>
+                    <p class="slds-text-color_error">{error}</p>
+                </template>
+            </lightning-accordion-section>
+
+            <!-- Salesforce Report Links Section -->
+            <lightning-accordion-section name="reportLinks" label="Standard Salesforce Reports">
+                <template if:true={reportLinks}>
+                    <ul class="slds-list_dotted slds-p-left_medium">
+                        <template for:each={reportLinks} for:item="report">
+                            <li key={report.url} class="slds-m-bottom_x-small">
+                                <a href={report.url} target="_blank" rel="noopener noreferrer">{report.name}</a>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+                <template if:false={reportLinks}>
+                    <p>No reports available.</p>
+                </template>
+            </lightning-accordion-section>
+
+            <!-- Non-Moving Inventory Section -->
+            <lightning-accordion-section name="nonMoving" label="Non Moving Inventory Report">
+                <!-- Export Button -->
+                <template if:true={groupedNonMovingData}>
+                    <template for:each={groupedNonMovingData} for:item="group">
+                        <div key={group.id} class="slds-box slds-m-bottom_medium">
+                            <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
+                                <h3 class="slds-text-heading_small slds-col">{group.label}</h3>
+
+                                <lightning-button-icon icon-name={group.toggleLabel} data-label={group.label}
+                                    onclick={toggleGroup} class="slds-m-right_small">
+                                </lightning-button-icon>
+
+                                <lightning-button label={materialHistoryLabel} icon-name="utility:download"
+                                    icon-position="right" onclick={exportNonMovingInventory} data-label={group.label}
+                                    disabled={materialHistoryBtnDisable}>
+                                </lightning-button>
+                            </div>
+
+                            <template if:true={group.isExpanded}>
+                                <div class="slds-m-bottom_small">
+                                    <!-- Using sort icons for better UX -->
+                                    <lightning-button label="Sort by Days Idle" value={group.sortByDaysIdleValue}
+                                        icon-name="utility:sort" onclick={handleSortClick}>
+                                    </lightning-button>
+
+                                    <lightning-button label="Sort by Stock Qty" class="slds-m-left_x-small"
+                                        value={group.sortByStockQtyValue} icon-name="utility:sort"
+                                        onclick={handleSortClick}>
+                                    </lightning-button>
+                                </div>
+
+                                <div class="slds-scrollable_x">
+                                    <lightning-datatable key-field="id" data={group.items} data-data={group.items}
+                                        columns={nonMovingColumns} data-id="nonMovingTableId">
+                                    </lightning-datatable>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </template>
+
+                <template if:true={nonMovingError}>
+                    <p class="slds-text-color_error">{nonMovingError}</p>
+                </template>
+            </lightning-accordion-section>
+
+            <!-- Zydus Serial Movement Report Section -->
+            <lightning-accordion-section name="zydusSerial" label="Report For Invoice Value Of Entire Sales Chain">
+                <!-- Date Range Filter -->
+                <div class="slds-m-bottom_small slds-grid slds-grid_align-spread slds-gutters">
+                    <div class="slds-col">
+                        <lightning-combobox name="zydusDateRange" label="Select Date Range" value={zydusDateRange}
+                            options={dateRangeOptions} onchange={handleZydusDateRangeChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col">
+                        <lightning-button label={materialHistoryLabel} icon-name="utility:download"
+                            icon-position="right" onclick={exportZydusSerial}
+                            disabled={materialHistoryBtnDisable}></lightning-button>
+                    </div>
+                </div>
+
+                <template if:true={zydusSerialData}>
+                    <div class="slds-scrollable_x">
+                        <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered"
+                            data-id="zydusSerialTableId">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2">Brand</th>
+                                    <th rowspan="2">Material Code</th>
+                                    <th rowspan="2">Batch Number</th>
+                                    <th rowspan="2">Serial No</th>
+                                    <th colspan="5">Zydus</th>
+                                    <th colspan="5">Super Distributor</th>
+                                    <th colspan="5">Distributor</th>
+                                    <th colspan="5">Sub Distributor</th>
+                                </tr>
+                                <tr>
+                                    <!-- Zydus -->
+                                    <th>Sales Value</th>
+                                    <th>Margin Value</th>
+                                    <th>Margin %</th>
+                                    <th>Purchase Price</th>
+                                    <th>Bill To Name</th>
+
+                                    <!-- Super Distributor -->
+                                    <th>Sales Value</th>
+                                    <th>Margin Value</th>
+                                    <th>Margin %</th>
+                                    <th>Purchase Price</th>
+                                    <th>Bill To Name</th>
+
+                                    <!-- Distributor -->
+                                    <th>Sales Value</th>
+                                    <th>Margin Value</th>
+                                    <th>Margin %</th>
+                                    <th>Purchase Price</th>
+                                    <th>Bill To Name</th>
+
+                                    <!-- Sub Distributor -->
+                                    <th>Sales Value</th>
+                                    <th>Margin Value</th>
+                                    <th>Margin %</th>
+                                    <th>Purchase Price</th>
+                                    <th>Bill To Name</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={zydusSerialData} for:item="row">
+                                    <tr key={row.serialNumber}>
+                                        <td>{row.brand}</td>
+                                        <td>{row.zydusProduct}</td>
+                                        <td>{row.batchNumber}</td>
+                                        <td>{row.serialNumber}</td>
+
+                                        <!-- Zydus -->
+                                        <td>{row.zydusAmountFormatted}</td>
+                                        <td>{row.zydusToSuperMarginFormatted}</td>
+                                        <td>{row.zydusToSuperMarginPercentFormatted}</td>
+                                        <td>----</td>
+                                        <td>{row.zydusBillToName}</td>
+
+                                        <!-- Super Distributor -->
+                                        <td>{row.superDistributorAmountFormatted}</td>
+                                        <td>{row.superToNextMarginFormatted}</td>
+                                        <td>{row.superToNextMarginPercentFormatted}</td>
+                                        <td>{row.superDistributorPurchasePriceFormatted}</td>
+                                        <td>{row.superDistributorBillToName}</td>
+
+                                        <!-- Distributor -->
+                                        <td>{row.distributorAmountFormatted}</td>
+                                        <td>{row.distributorToNextMarginFormatted}</td>
+                                        <td>{row.distributorToNextMarginPercentFormatted}</td>
+                                        <td>{row.distributorPurchasePriceFormatted}</td>
+                                        <td>{row.distributorBillToName}</td>
+
+                                        <!-- Sub Distributor -->
+                                        <td>{row.subDistributorAmountFormatted}</td>
+                                        <td>{row.subToHospitalMarginFormatted}</td>
+                                        <td>{row.subToHospitalMarginPercentFormatted}</td>
+                                        <td>{row.subDistributorPurchasePriceFormatted}</td>
+                                        <td>{row.subDistributorBillToName}</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    <div class="slds-m-top_medium slds-align_absolute-center">
+                        <lightning-button label="Previous" onclick={handlePreviousPage} disabled={isFirstPage}>
+                        </lightning-button>
+                        <span class="slds-m-horizontal_medium">
+                            Page {pageNumber} of {totalPages}
+                        </span>
+                        <lightning-button label="Next" onclick={handleNextPage} disabled={isLastPage}>
+                        </lightning-button>
+                    </div>
+                </template>
+
+                <template if:true={zydusSerialError}>
+                    <p class="slds-text-color_error">{zydusSerialError}</p>
+                </template>
+            </lightning-accordion-section>
+
+            <!-- Zydus Serial Movement Report Section -->
+            <lightning-accordion-section name="materialhistory" label="Report For Material History">
+
+                <!-- Export Button -->
+                <div class="slds-m-bottom_small slds-grid slds-grid_align-spread slds-gutters">
+                    <!-- Left: Combobox -->
+                    <div class="slds-col">
+                        <lightning-combobox name="pageSize" label="Records Per Page" options={materialOptions}
+                            value={materialHistoryPageSize} onchange={handleMaterialPageSizeChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-grid slds-grid_align-end">
+                        <lightning-button label="Track Material Journey By Serial Number" onclick={navigateToTab}
+                            variant="brand-outline" class="slds-m-right_small">
+                        </lightning-button>
+
+                        <lightning-button label={materialHistoryLabel} icon-name="utility:download"
+                            icon-position="right" onclick={downloadExcelMaterialHistory}
+                            disabled={materialHistoryBtnDisable}>
+                        </lightning-button>
+                    </div>
+                </div>
+
+
+                <template if:true={processedData}>
+                    <div class="slds-scrollable_x">
+                        <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered"
+                            data-id="materialHistoryData">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2">Brand</th>
+                                    <th rowspan="2">Material Code</th>
+                                    <th rowspan="2">Batch Number</th>
+                                    <th rowspan="2">Serial No</th>
+                                    <th colspan="8">Zydus</th>
+                                    <th colspan="8">Super Distributor</th>
+                                    <th colspan="8">Distributor</th>
+                                    <th colspan="8">Sub Distributor</th>
+                                    <th colspan="8">Hospital</th>
+                                </tr>
+                                <tr>
+                                    <th>Warehouse Name</th>
+                                    <th>By</th>
+                                    <th>Status From</th>
+                                    <th>Status To</th>
+                                    <th>Date</th>
+                                    <th>PO</th>
+                                    <th>SO</th>
+                                    <th>DC</th>
+                                    <th>Warehouse Name</th>
+                                    <th>By</th>
+                                    <th>Status From</th>
+                                    <th>Status To</th>
+                                    <th>Date</th>
+                                    <th>PO</th>
+                                    <th>SO</th>
+                                    <th>DC</th>
+                                    <th>Warehouse Name</th>
+                                    <th>By</th>
+                                    <th>Status From</th>
+                                    <th>Status To</th>
+                                    <th>Date</th>
+                                    <th>PO</th>
+                                    <th>SO</th>
+                                    <th>DC</th>
+                                    <th>Warehouse Name</th>
+                                    <th>By</th>
+                                    <th>Status From</th>
+                                    <th>Status To</th>
+                                    <th>Date</th>
+                                    <th>PO</th>
+                                    <th>SO</th>
+                                    <th>DC</th>
+                                    <th>Warehouse Name</th>
+                                    <th>By</th>
+                                    <th>Status From</th>
+                                    <th>Status To</th>
+                                    <th>Date</th>
+                                    <th>PO</th>
+                                    <th>SO</th>
+                                    <th>DC</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={processedData} for:item="row" for:index="idx">
+                                    <tr key={row.serialNumber}>
+                                        <!-- Only on the first row for this serial number group -->
+                                        <template if:true={row.isFirstRow}>
+                                            <td rowspan={row.rowspan}>{row.brand}</td>
+                                            <td rowspan={row.rowspan}>{row.materialCode}</td>
+                                            <td rowspan={row.rowspan}>{row.batchName}</td>
+                                            <td rowspan={row.rowspan}>{row.serialNumber}</td>
+                                        </template>
+                                        <!-- Otherwise, skip those TDs entirely -->
+                                        <!-- Zydus columns -->
+                                        <td>{row.zydus.warehouseName}</td>
+                                        <td>{row.zydus.by}</td>
+                                        <td>{row.zydus.statusFrom}</td>
+                                        <td>{row.zydus.statusTo}</td>
+                                        <td>{row.zydus.date}</td>
+                                        <td>{row.zydus.po}</td>
+                                        <td>{row.zydus.so}</td>
+                                        <td>{row.zydus.dc}</td>
+                                        <!-- Super Distributor -->
+                                        <td>{row.superDistributor.warehouseName}</td>
+                                        <td>{row.superDistributor.by}</td>
+                                        <td>{row.superDistributor.statusFrom}</td>
+                                        <td>{row.superDistributor.statusTo}</td>
+                                        <td>{row.superDistributor.date}</td>
+                                        <td>{row.superDistributor.po}</td>
+                                        <td>{row.superDistributor.so}</td>
+                                        <td>{row.superDistributor.dc}</td>
+                                        <!-- Distributor -->
+                                        <td>{row.distributor.warehouseName}</td>
+                                        <td>{row.distributor.by}</td>
+                                        <td>{row.distributor.statusFrom}</td>
+                                        <td>{row.distributor.statusTo}</td>
+                                        <td>{row.distributor.date}</td>
+                                        <td>{row.distributor.po}</td>
+                                        <td>{row.distributor.so}</td>
+                                        <td>{row.distributor.dc}</td>
+                                        <!-- Sub Distributor -->
+                                        <td>{row.subDistributor.warehouseName}</td>
+                                        <td>{row.subDistributor.by}</td>
+                                        <td>{row.subDistributor.statusFrom}</td>
+                                        <td>{row.subDistributor.statusTo}</td>
+                                        <td>{row.subDistributor.date}</td>
+                                        <td>{row.subDistributor.po}</td>
+                                        <td>{row.subDistributor.so}</td>
+                                        <td>{row.subDistributor.dc}</td>
+                                        <!-- Hospital -->
+                                        <td>{row.hospital.warehouseName}</td>
+                                        <td>{row.hospital.by}</td>
+                                        <td>{row.hospital.statusFrom}</td>
+                                        <td>{row.hospital.statusTo}</td>
+                                        <td>{row.hospital.date}</td>
+                                        <td>{row.hospital.po}</td>
+                                        <td>{row.hospital.so}</td>
+                                        <td>{row.hospital.dc}</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+
+                        </table>
+
+                        <template if:true={isMaterialLoading}>
+                            <div class="slds-align_absolute-center">
+                                <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="slds-m-top_medium slds-align_absolute-center">
+                        <lightning-button label="Previous" onclick={handleMaterialPreviousPage}
+                            disabled={isMaterialFirstPage}>
+                        </lightning-button>
+                        <span class="slds-m-horizontal_medium">
+                            Page {materialPageNumber} of {materialTotalPages}
+                        </span>
+                        <lightning-button label="Next" onclick={handleMaterialNextPage} disabled={isMaterialLastPage}>
+                        </lightning-button>
+                    </div>
+                </template>
+                <template if:true={zydusSerialError}>
+                    <p class="slds-text-color_error">{zydusSerialError}</p>
+                </template>
+            </lightning-accordion-section>
+
+            <!-- Outstanding Payment Report Section -->
+            <lightning-accordion-section name="outstandingReport" label="Outstanding Payment Report">
+                <div class="slds-m-bottom_small slds-grid slds-grid_align-spread slds-gutters">
+                
+                    <div class="slds-col">
+                        <lightning-combobox name="salesCategory" label="Sales Category" value={selectedSalesCategory}
+                            options={salesInvoiceCategoryOptions} onchange={handleSalesCategoryChange}>
+                        </lightning-combobox>
+                    </div>
+
+                    <div class="slds-col">
+                        <lightning-button label={materialHistoryLabel} icon-name="utility:download"
+                            icon-position="right" onclick={exportOutstandingReport}
+                            disabled={materialHistoryBtnDisable}>
+                        </lightning-button>
+                    </div>
+                </div>
+                <template if:true={outstandingReportData}>
+                    <div class="slds-scrollable_x">
+                        <lightning-datatable key-field="id" data={outstandingReportData}
+                            columns={outstandingReportColumns}>
+                        </lightning-datatable>
+                    </div>
+                </template>
+                <template if:true={outstandingReportError}>
+                    <p class="slds-text-color_error">{outstandingReportError}</p>
+                </template>
+            </lightning-accordion-section>
+
+        </lightning-accordion>
+    </div>
+</template>

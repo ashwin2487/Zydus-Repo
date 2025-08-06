@@ -19,7 +19,6 @@ public without sharing class InvoiceCreationController {
             allAccountsMap.put(acc.Id, acc);
         }
         
-        // Get child accounts
         List<Account> childAccounts = [
             SELECT Id, Name, ParentId, Validity_of_Drug_Licence__c, PAN_Number__c, Mobile_Number__c,Contact_Person_Email__c,
             Address__c, City__c,State__c, Account_Pin_Code__c
@@ -197,18 +196,21 @@ public without sharing class InvoiceCreationController {
             Supplied_Date__c,
             Status__c,
             Warehouse__c,
-            Unit_Price__c,
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c,
             Connected_Warehouse__c,
             Warehouse__r.Zydus_Product__r.Name,
             Warehouse__r.Zydus_Product__r.HSN_Code__c,
             Delivery_Challan_Line_Item__c,
+            Delivery_Challan_Line_Item__r.Name,
             Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignee_Hospital__r.Zydus_Price_Book__c,
             Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignor_Distributor__r.Zydus_Price_Book__c,
             GRN__r.Delivery_Challan__r.Name,
-            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c,
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Credit_Note_Amount__c
             FROM Warehouse_Product_Line_Items__c
             WHERE Delivery_Challan_Line_Item__c IN :dcLineIds
             AND Connected_Warehouse__c IN :warehouseIds
+            AND Status__c = 'Available'
         ];
         if (wpList.isEmpty()) return new List<WarehouseProductLineItemWrapper>();
         
@@ -240,10 +242,9 @@ public without sharing class InvoiceCreationController {
             taxRateMap.put(key, tax);
         }
         
-        // Build wrapper list
         List<WarehouseProductLineItemWrapper> result = new List<WarehouseProductLineItemWrapper>();
         for (Warehouse_Product_Line_Items__c wp : wpList) {
-            Decimal unitPrice = wp.Unit_Price__c != null ? wp.Unit_Price__c : 0;
+            Decimal unitPrice = wp.Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c != null ? wp.Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c : 0;
             Decimal cgst = 0, sgst = 0, igst = 0;
             Id hsnId = wp.Warehouse__r.Zydus_Product__r.HSN_Code__c;
             String key = hsnId + '_' + supplierState + '_' + supplyType;
@@ -261,6 +262,74 @@ public without sharing class InvoiceCreationController {
         return result;
     }
     
+    @AuraEnabled(cacheable=true)
+    public static List<WarehouseProductLineItemWrapper> getWarehouseProductLineItemsBySerialNumber(Id hospitalId, String serialNumber) {
+        if (hospitalId == null || serialNumber == null) {
+            return new List<WarehouseProductLineItemWrapper>();
+        }
+        List<Warehouse_Product_Line_Items__c> wpList = [
+            SELECT
+            Id, Serial_Number__c, Condition__c, Sold_Date__c, Supplied_Date__c, Status__c,
+            Warehouse__c, Connected_Warehouse__c,
+            Delivery_Challan_Line_Item__c,
+            Delivery_Challan_Line_Item__r.Name,
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c,
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c,
+            Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignor_Distributor__c,
+            Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignor_Distributor__r.State__c,
+            Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignee_Hospital__r.State__c,
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Credit_Note_Amount__c,
+            Warehouse__r.Zydus_Product__r.Name,
+            Warehouse__r.Zydus_Product__r.HSN_Code__c
+            FROM Warehouse_Product_Line_Items__c
+            WHERE Serial_Number__c = :serialNumber
+            AND Status__c = 'Available'
+            AND Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignee_Hospital__c = :hospitalId
+            AND Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignor_Distributor__r.Business_Owner__c = :UserInfo.getUserId()
+            LIMIT 1 
+        ];
+        
+        if (wpList.isEmpty()) {
+            return new List<WarehouseProductLineItemWrapper>();
+        }
+        
+        Warehouse_Product_Line_Items__c wp = wpList[0];
+        String buyerState = wp.Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignee_Hospital__r.State__c;
+        String supplierState = wp.Delivery_Challan_Line_Item__r.Delivery_Challan__r.Consignor_Distributor__r.State__c;
+        String supplyType = buyerState == supplierState ? 'Intra-State' : 'Inter-State';
+        
+        Date today = Date.today();
+        Id hsnId = wp.Warehouse__r.Zydus_Product__r.HSN_Code__c;
+        HSN_Tax_Master_Link__c tax = [
+            SELECT CGST__c, SGST__c, IGST__c
+            FROM HSN_Tax_Master_Link__c
+            WHERE HSN_Code__c = :hsnId
+            AND Supply_Type__c = :supplyType
+            AND Is_Active__c = TRUE
+            AND Tax_Master__r.Is_Active__c = TRUE
+            AND Tax_Master__r.State__c = :supplierState
+            AND Tax_Master__r.Effective_From__c <= :today
+            AND (Tax_Master__r.Effective_To__c = NULL OR Tax_Master__r.Effective_To__c >= :today)
+            LIMIT 1
+        ];
+        
+        Decimal unitPrice = wp.Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c != null
+            ? wp.Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c : 0;
+        Decimal cgst = 0, sgst = 0, igst = 0;
+        
+        if (tax != null) {
+            if (supplyType == 'Intra-State') {
+                cgst = unitPrice * (tax.CGST__c / 100);
+                sgst = unitPrice * (tax.SGST__c / 100);
+            } else {
+                igst = unitPrice * (tax.IGST__c / 100);
+            }
+        }
+        
+        List<WarehouseProductLineItemWrapper> result = new List<WarehouseProductLineItemWrapper>();
+        result.add(new WarehouseProductLineItemWrapper(wp, unitPrice + cgst + sgst + igst, cgst, sgst, igst));
+        return result;
+    }
     
     @AuraEnabled
     public static Id saveInvoice(String invoiceData) {
@@ -305,11 +374,6 @@ public without sharing class InvoiceCreationController {
             }
             
             Invoice__c invoice = new Invoice__c();
-            invoice.Patient_First_Name__c = (String) patient.get('firstName');
-            invoice.Patient_Last_Name__c = (String) patient.get('lastName');
-            invoice.Patient_Age__c = Integer.valueOf(patient.get('age'));
-            invoice.Patient_Gender__c = (String) patient.get('gender');
-            invoice.Patient_Register_Number__c = (String) patient.get('patientRegisterNumber');
             invoice.Hospital__c = (String) data.get('hospitalId');
             invoice.RecordTypeId = recordTypeMap.get('Hospital Invoice');
             invoice.Invoice_Type__c = (String) data.get('invoiceType');
@@ -319,23 +383,21 @@ public without sharing class InvoiceCreationController {
             }
             
             invoice.Consignor_Dealer__c = (String) data.get('accountId');
-            invoice.Doctor_Name__c = (String) doctor.get('name');
-            invoice.IP_Number__c = (String) doctor.get('ipNumber');
             invoice.Comment_Remark__c = (String) doctor.get('comment');
-            invoice.CATH_Number__c = (String) doctor.get('cathNumber');
-            String implantDateStr = (String) doctor.get('implantDate');
-            if (!String.isBlank(implantDateStr)) {
-                invoice.Date_of_Implant__c = Date.valueOf(implantDateStr);
+            if((String) data.get('invoiceType')!='FOC'){
+                invoice.Payment_Status__c = hasExpiryScheme ? 'Draft Invoice' : 'Invoice Created';
+            }else{
+                invoice.Payment_Status__c = 'Draft Invoice';
             }
-            
-            invoice.Payment_Status__c = hasExpiryScheme ? 'Draft Invoice' : 'Invoice Created';
             invoice.InvoiceDate__c = Date.today();
             
-            Hospital__c curHospital = [select Id ,Comment_Options__c,Invoice_Comment__c from Hospital__c where Id =: (String) data.get('hospitalId') ];
+            
+            Hospital__c curHospital = [select Id ,Comment_Options__c,Invoice_Comment__c , State__C from Hospital__c where Id =: (String) data.get('hospitalId') ];
             
             if(curHospital.Comment_Options__c != null && curHospital.Comment_Options__c.contains('INL')){
                 if(curHospital.Invoice_Comment__c != null){
                     invoice.Comment__c = curHospital.Invoice_Comment__c;
+                    invoice.Region_Of_Sale__c = curHospital.state__c;
                 }
             }
             insert invoice;
@@ -351,6 +413,8 @@ public without sharing class InvoiceCreationController {
             List<Warehouse_Product_Line_Items__c> toUpdateWPL = new List<Warehouse_Product_Line_Items__c>();
             List<Invoice_Product_Line_Item__c> junctionRecords = new List<Invoice_Product_Line_Item__c>();
             List<Delivery_Challan_Line_Item__c> dcLineItemsToUpdate = new List<Delivery_Challan_Line_Item__c>();
+            Set<Id> dcIdsSet = new Set<Id>();
+            List<Invoice_DC__c> InvoiceToDcCreate = new List<Invoice_DC__c>();
             Set<String> consumedSerialNumbers = new Set<String>();
             
             for (Warehouse_Product_Line_Items__c item : selectedLineItems) {
@@ -360,8 +424,7 @@ public without sharing class InvoiceCreationController {
                 if (item.Delivery_Challan_Line_Item__c != null) {
                     dcLineItemsToUpdate.add(new Delivery_Challan_Line_Item__c(
                         Id = item.Delivery_Challan_Line_Item__c,
-                        Is_Invoiced_To_Hospital__c = true,
-                        Is_Invoiced_By_parent_Account__c = true
+                        Is_Invoiced_To_Hospital__c = true
                     ));
                 }
                 toUpdateWPL.add(item);
@@ -374,6 +437,10 @@ public without sharing class InvoiceCreationController {
                 Decimal netAmount = inputs.containsKey('netAmount') ? (Decimal) inputs.get('netAmount') : 0;
                 String scheme	  = inputs.containsKey('scheme') 	? (String) inputs.get('scheme')		: null;
                 Decimal billDiscountAmount = inputs.containsKey('billDiscountAmount') ? (Decimal) inputs.get('billDiscountAmount') : 0;
+                String dcLineItem = inputs.containsKey('dcLineItem') 	? (String) inputs.get('dcLineItem')		: null;
+                String dc	      = inputs.containsKey('dc') 	? (String) inputs.get('dc')		: null;
+                
+                dcIdsSet.add(dc);
                 
                 junctionRecords.add(new Invoice_Product_Line_Item__c(
                     Invoice__c = invoice.Id,
@@ -390,14 +457,31 @@ public without sharing class InvoiceCreationController {
                     Unit_Price__c = item.Unit_Price__c,
                     Scheme__c = scheme,
                     Expiry_Date__c=item.Expiry_Date__c,
-                    Manufacture_Date__c = item.Manufactured_Date__c
-                    
+                    Manufacture_Date__c = item.Manufactured_Date__c,
+                    Delivery_Challan_Line_Item__c = dcLineItem,
+                    Date_of_Implant__c = Date.valueOf((String) doctor.get('implantDate')),
+                    CATH_Number__c = (String) doctor.get('cathNumber'),
+                    IP_Number__c = (String) doctor.get('ipNumber'),
+                    Patient_Register_Number__c = (String) patient.get('patientRegisterNumber'),
+                    Patient_Gender__c = (String) patient.get('gender'),
+                    Patient_Age__c = Integer.valueOf(patient.get('age')),
+                    Patient_Last_Name__c = (String) patient.get('lastName'),
+                    Patient_First_Name__c = (String) patient.get('firstName'),
+                    Doctor_Name__c = (String) doctor.get('name')
+                ));
+            }
+            
+            for(Id dcId:dcIdsSet){
+                InvoiceToDcCreate.add(new Invoice_DC__c(
+                    Invoice__c				= invoice.Id,
+                    Delivery_Challan__c		= dcId
                 ));
             }
             
             if (!toUpdateWPL.isEmpty()) update toUpdateWPL;
             if (!dcLineItemsToUpdate.isEmpty()) update dcLineItemsToUpdate;
             if (!junctionRecords.isEmpty()) insert junctionRecords;
+            if (!InvoiceToDcCreate.isEmpty()) insert InvoiceToDcCreate;
             
             if (data.containsKey('uploadedFileIds')) {
                 List<Object> fileIdsRaw = (List<Object>) data.get('uploadedFileIds');
@@ -422,14 +506,54 @@ public without sharing class InvoiceCreationController {
                 if (!cdls.isEmpty()) insert cdls;
             }
             
+            Id approvalId;
+            invoice__c currentInvoice = [select Id , FOC_Approval_Request_Id__c , Expiry_Approval_Request_Id__c from invoice__c where Id =: invoice.Id];
+            
             if (invoice.Payment_Status__c == 'Draft Invoice') {
                 Approval.ProcessSubmitRequest req = new Approval.ProcessSubmitRequest();
                 req.setObjectId(invoice.Id);
                 req.setProcessDefinitionNameOrId('Invoice_Approval_Process');
                 req.setComments('Invoice submitted for approval');
+                
                 Approval.ProcessResult res = Approval.process(req);
-            }
-            
+                
+                if (res.isSuccess()) {
+                    List<ProcessInstance> instances = [
+                        SELECT Id 
+                        FROM ProcessInstance 
+                        WHERE TargetObjectId = :invoice.Id 
+                        ORDER BY CreatedDate DESC 
+                        LIMIT 1
+                    ];
+                    if (!instances.isEmpty()) {
+                        approvalId = instances[0].Id;
+                       currentInvoice.Expiry_Approval_Request_Id__c = approvalId;
+                    }
+                }
+                
+            } else if (invoice.Invoice_Type__c == 'FOC') {
+                Approval.ProcessSubmitRequest req = new Approval.ProcessSubmitRequest();
+                req.setObjectId(invoice.Id);
+                req.setProcessDefinitionNameOrId('Consignment_FOC_Approval');
+                req.setComments('Invoice submitted for approval');
+                
+                Approval.ProcessResult res = Approval.process(req);
+                
+                if (res.isSuccess()) {
+                    List<ProcessInstance> instances = [
+                        SELECT Id 
+                        FROM ProcessInstance 
+                        WHERE TargetObjectId = :invoice.Id 
+                        ORDER BY CreatedDate DESC 
+                        LIMIT 1
+                    ];
+                    if (!instances.isEmpty()) {
+                        approvalId = instances[0].Id;
+                        currentInvoice.FOC_Approval_Request_Id__c = approvalId;
+                    }
+                }
+            } 
+            update currentInvoice;
             Id currentUserId = UserInfo.getUserId();
             Set<String> toBeUpdatedOwnedDeliveryChallan = new Set<String>();
             
@@ -575,7 +699,6 @@ public without sharing class InvoiceCreationController {
         }
     }
     
-    
     @AuraEnabled
     public static List<String> existingDoctor(String keyword) {
         
@@ -585,16 +708,16 @@ public without sharing class InvoiceCreationController {
         Set<String> doctorNames = new Set<String>();
         
         if (String.isNotBlank(keyword)) {
-            for (Invoice__c invoice : [
-                SELECT Doctor_Name__c FROM Invoice__c 
+            for (Invoice_Product_Line_Item__c invoice : [
+                SELECT Doctor_Name__c FROM Invoice_Product_Line_Item__c 
                 WHERE Doctor_Name__c != null AND 
                 Doctor_Name__c LIKE :('%' + keyword + '%')
             ]) {
                 doctorNames.add(invoice.Doctor_Name__c);
             }
         } else {
-            for (Invoice__c invoice : [
-                SELECT Doctor_Name__c FROM Invoice__c 
+            for (Invoice_Product_Line_Item__c invoice : [
+                SELECT Doctor_Name__c FROM Invoice_Product_Line_Item__c 
                 WHERE Doctor_Name__c != null
             ]) {
                 doctorNames.add(invoice.Doctor_Name__c);
@@ -611,16 +734,16 @@ public without sharing class InvoiceCreationController {
         Set<String> cathNumbers = new Set<String>();
         
         if (String.isNotBlank(keyword)) {
-            for (Invoice__c invoice : [
-                SELECT CATH_Number__c FROM Invoice__c 
+            for (Invoice_Product_Line_Item__c invoice : [
+                SELECT CATH_Number__c FROM Invoice_Product_Line_Item__c 
                 WHERE CATH_Number__c != null AND 
                 CATH_Number__c LIKE :('%' + keyword + '%') //AND Consignee_Dealer__c =:currAcc.Id
             ]) {
                 cathNumbers.add(invoice.CATH_Number__c);
             }
         } else {
-            for (Invoice__c invoice : [
-                SELECT CATH_Number__c FROM Invoice__c 
+            for (Invoice_Product_Line_Item__c invoice : [
+                SELECT CATH_Number__c FROM Invoice_Product_Line_Item__c 
                 WHERE CATH_Number__c != null //AND Consignee_Dealer__c =:currAcc.Id
             ]) {
                 cathNumbers.add(invoice.CATH_Number__c);
@@ -658,7 +781,7 @@ public without sharing class InvoiceCreationController {
     public static List<Account> getSubChannelPartnerOptions() {
         
         Account currAccount=[SELECT Id, RecordType.Name FROM Account WHERE Business_Owner__c = :UserInfo.getUserId()];
-       	String rtName = currAccount.RecordType.Name;
+        String rtName = currAccount.RecordType.Name;
         
         Set<Id> consigneeDistributorsIds = new Set<Id>();
         
@@ -736,30 +859,6 @@ public without sharing class InvoiceCreationController {
         return invoices;
     }
     
-    @AuraEnabled
-    public static Invoice__c getInvoiceData(String invoiceId) {
-        return [
-            SELECT 
-            Id,
-            Name,
-            Patient_First_Name__c,
-            Patient_Last_Name__c,
-            Patient_Age__c,
-            Patient_Gender__c,
-            Patient_Register_Number__c,
-            Delivery_Challan__c,
-            BillingAccountId__c,
-            Doctor_Name__c,
-            IP_Number__c,
-            Comment_Remark__c,
-            CATH_Number__c,
-            Date_of_Implant__c,
-            Invoice_Type__c
-            FROM Invoice__c 
-            WHERE Id = :invoiceId 
-            LIMIT 1
-        ];
-    }
     
     @AuraEnabled(cacheable=true)
     public static List<String> getPaymentModePicklistValues() {
@@ -780,24 +879,8 @@ public without sharing class InvoiceCreationController {
         return picklistValues;
     }
     
-    public class ChannelPartnerLineItemDTO {
-        @AuraEnabled public String Id;
-        @AuraEnabled public String serialNumber;
-        @AuraEnabled public String dcName;
-        @AuraEnabled public String productName;
-        @AuraEnabled public Date suppliedDate;
-        @AuraEnabled public String status;
-        @AuraEnabled public String condition;
-        @AuraEnabled public Decimal sgst;
-        @AuraEnabled public Decimal cgst;
-        @AuraEnabled public Decimal igst;
-        @AuraEnabled public Decimal netAmount;
-        @AuraEnabled public Decimal unitPrice;
-        @AuraEnabled public Decimal billDiscountAmount;
-    }
-    
     @AuraEnabled
-    public static List<ChannelPartnerLineItemDTO> getChannelPartnerLineItems(String dcId, String invoiceId) {
+    public static List<ChannelPartnerLineItemDTOScan> getChannelPartnerLineItems(String dcId, String invoiceId) {
         
         Delivery_Challan__c dc = [
             SELECT Id,
@@ -807,27 +890,31 @@ public without sharing class InvoiceCreationController {
             WHERE Id = :dcId
         ];
         
+        Map<String,Invoice_Product_Line_Item__c> serialToInvpMap= new Map<String,Invoice_Product_Line_Item__c>();        
         Map<String, Id> serialToInvp=new Map<String, Id>();
-        for(Invoice_Product_Line_Item__c invp: [SELECT Id, Serial_Number__c FROM Invoice_Product_Line_Item__c WHERE Invoice__C=:invoiceId]){
-            serialToInvp.put(invp.Serial_Number__c, invp.Id);
-        }
+        for(Invoice_Product_Line_Item__c invp: [SELECT Id, Serial_Number__c,Patient_First_Name__c,Patient_Last_Name__c, Patient_Age__c,
+                                                Patient_Register_Number__c,CATH_Number__c,IP_Number__c, Patient_Gender__c, Doctor_Name__c, Date_Of_Implant__c
+                                                FROM Invoice_Product_Line_Item__c WHERE Invoice__c=:invoiceId]){
+                                                    serialToInvpMap.put(invp.Serial_Number__c, invp);
+                                                    serialToInvp.put(invp.Serial_Number__c, invp.Id);
+                                                }
         
         
         List<Delivery_Challan_Line_Item__c> dcItems = [
-            SELECT Id, Serial_Number__c, Delivery_Challan__r.Name, Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c
+            SELECT Id, Name, Serial_Number__c, Delivery_Challan__r.Name, Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c, Zydus_Price_Book_Entry__r.Credit_Note_Amount__c
             FROM Delivery_Challan_Line_Item__c
             WHERE Delivery_Challan__c = :dcId
             AND Is_Invoiced_To_Hospital__c = true
             AND Is_Invoiced_By_parent_Account__c = false AND Serial_Number__c IN :serialToInvp.keySet()
         ];
-        if (dcItems.isEmpty()) return new List<ChannelPartnerLineItemDTO>();
+        if (dcItems.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
         
         Set<String> serialNumbers = new Set<String>();
         for (Delivery_Challan_Line_Item__c li : dcItems) {
             if (String.isNotBlank(li.Serial_Number__c))
                 serialNumbers.add(li.Serial_Number__c);
         }
-        if (serialNumbers.isEmpty()) return new List<ChannelPartnerLineItemDTO>();
+        if (serialNumbers.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
         
         List<Warehouse__c> whs = [
             SELECT Id
@@ -847,20 +934,20 @@ public without sharing class InvoiceCreationController {
         for (Warehouse_Product_Line_Items__c wp : [
             SELECT Id,
             Serial_Number__c,
-            Unit_Price__c
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c
             FROM Warehouse_Product_Line_Items__c
             WHERE Connected_Warehouse__c IN :consigneewhIds
             AND Serial_Number__c IN :serialNumbers
             AND Status__c = 'Consumed'
             AND Condition__c = 'Good'
         ]) {
-            consigneeWpMap.put(wp.Serial_Number__c, wp.Unit_Price__c);
+            consigneeWpMap.put(wp.Serial_Number__c, wp.Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c);
         }
         
         
         Set<Id> whIds = new Set<Id>();
         for (Warehouse__c w : whs) whIds.add(w.Id);
-        if (whIds.isEmpty()) return new List<ChannelPartnerLineItemDTO>();
+        if (whIds.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
         
         Map<String, Warehouse_Product_Line_Items__c> wpMap = new Map<String, Warehouse_Product_Line_Items__c>();
         for (Warehouse_Product_Line_Items__c wp : [
@@ -869,7 +956,6 @@ public without sharing class InvoiceCreationController {
             Supplied_Date__c,
             Status__c,
             Condition__c,
-            Unit_Price__c,
             Warehouse__r.Zydus_Product__r.Name,
             Warehouse__r.Zydus_Product__r.HSN_Code__c,
             Delivery_Challan_Line_Item__c
@@ -881,6 +967,8 @@ public without sharing class InvoiceCreationController {
         ]) {
             wpMap.put(wp.Serial_Number__c, wp);
         }
+        
+        if (wpMap.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
         
         String buyerState = [SELECT State__c FROM Account WHERE Id = :dc.Consignee_Distributor__c].State__c;
         String supplierState = [SELECT State__c FROM Account WHERE Id = :dc.Consignor_Distributor__c].State__c;
@@ -908,13 +996,15 @@ public without sharing class InvoiceCreationController {
             }
         }
         
-        List<ChannelPartnerLineItemDTO> result = new List<ChannelPartnerLineItemDTO>();
+        List<ChannelPartnerLineItemDTOScan> result = new List<ChannelPartnerLineItemDTOScan>();
         
         for (Delivery_Challan_Line_Item__c li : dcItems) {
-            ChannelPartnerLineItemDTO dto = new ChannelPartnerLineItemDTO();
+            ChannelPartnerLineItemDTOScan dto = new ChannelPartnerLineItemDTOScan();
             
+            dto.dcliId		 = li.Id;            
             dto.serialNumber = li.Serial_Number__c;
-            dto.dcName       = li.Delivery_Challan__r?.Name;
+            dto.dcName       = li?.Name;
+            dto.creditNoteAmount = li.Zydus_Price_Book_Entry__r.Credit_Note_Amount__c;
             Decimal billDiscountAmount = li.Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c;
             
             Warehouse_Product_Line_Items__c wp = wpMap.get(li.Serial_Number__c);
@@ -924,9 +1014,8 @@ public without sharing class InvoiceCreationController {
                 dto.suppliedDate = wp.Supplied_Date__c;
                 dto.status       = wp.Status__c;
                 dto.condition    = wp.Condition__c;
-                Decimal unitPrice = consigneeWpMap.get(li.Serial_Number__c)!=null ? consigneeWpMap.get(li.Serial_Number__c) : 0;
+                Decimal unitPrice = consigneeWpMap.get(li.Serial_Number__c) !=null ? consigneeWpMap.get(li.Serial_Number__c) : 0;
                 dto.unitPrice = unitPrice;
-                
                 Decimal cgst = 0, sgst = 0, igst = 0;
                 Id   hsnKey = wp.Warehouse__r.Zydus_Product__r.HSN_Code__c;
                 String taxKey = hsnKey + '_' + supplierState + '_' + supplyType;
@@ -957,6 +1046,235 @@ public without sharing class InvoiceCreationController {
                 dto.sgst         = 0;
                 dto.igst         = 0;
                 dto.billDiscountAmount = 0;
+            }
+            
+            Invoice_Product_Line_Item__c invp = serialToInvpMap.get(li.Serial_Number__c);
+            if(invp != null){
+                dto.implantDate = invp.Date_of_Implant__c;
+                dto.patientGender=invp.Patient_Gender__c;
+                dto.patientFirstName = invp.Patient_First_Name__c;
+                dto.patientLastName = invp.Patient_Last_Name__c;
+                dto.patientAge = invp.Patient_Age__c;
+                dto.patientRegisterNumber = invp.Patient_Register_Number__c;
+                dto.cathNumber = invp.CATH_Number__c;
+                dto.ipNumber = invp.IP_Number__c;
+                dto.doctorName = invp.Doctor_Name__c;
+            }
+            result.add(dto);
+        }
+        return result;
+    }
+    
+    public class ChannelPartnerLineItemDTOScan{
+        @AuraEnabled public String Id { get; set; }
+        @AuraEnabled public String serialNumber { get; set; }
+        @AuraEnabled public String dcName { get; set; }
+        @AuraEnabled public String productName { get; set; }
+        @AuraEnabled public Date suppliedDate { get; set; }
+        @AuraEnabled public String status { get; set; }
+        @AuraEnabled public String condition { get; set; }
+        @AuraEnabled public Decimal unitPrice { get; set; }
+        @AuraEnabled public Decimal netAmount { get; set; }
+        @AuraEnabled public Decimal cgst { get; set; }
+        @AuraEnabled public Decimal sgst { get; set; }
+        @AuraEnabled public Decimal igst { get; set; }
+        @AuraEnabled public Decimal billDiscountAmount { get; set; }
+        @AuraEnabled public Decimal creditNoteAmount { get; set; }
+        @AuraEnabled public Id dcliId { get; set; }
+        
+        @AuraEnabled public String patientFirstName { get; set; }
+        @AuraEnabled public String patientLastName { get; set; }
+        @AuraEnabled public String patientGender { get; set; }
+        @AuraEnabled public Decimal patientAge { get; set; }
+        @AuraEnabled public String patientRegisterNumber { get; set; }
+        @AuraEnabled public Date implantDate { get; set; }
+        @AuraEnabled public String cathNumber { get; set; }
+        @AuraEnabled public String ipNumber { get; set; }
+        @AuraEnabled public String doctorName { get; set; }
+    }
+    
+    @AuraEnabled
+    public static List<ChannelPartnerLineItemDTOScan> getChannelPartnerLineItemsBySerialNumber(String consigneeId, String serialNumber) {
+        
+        Account currAccount = [SELECT Id FROM Account WHERE Business_Owner__c =:UserInfo.getUserId()];
+        
+        Map<Id, Delivery_Challan__c> dcMap = new Map<Id, Delivery_Challan__c>([
+            SELECT Id,
+            Consignee_Distributor__c,
+            Consignor_Distributor__c
+            FROM Delivery_Challan__c
+            WHERE Consignee_Distributor__c = :consigneeId
+            AND Consignor_Distributor__c = :currAccount.Id 
+        ]);
+        
+        Map<String,Invoice_Product_Line_Item__c> serialToInvpMap= new Map<String,Invoice_Product_Line_Item__c>();        
+        Map<String, Id> serialToInvp=new Map<String, Id>();
+        for(Invoice_Product_Line_Item__c invp: [SELECT Id, Serial_Number__c,Patient_First_Name__c,Patient_Last_Name__c, Patient_Age__c,
+                                                Patient_Register_Number__c,CATH_Number__c,IP_Number__c, Patient_Gender__c, Doctor_Name__c, Date_Of_Implant__c
+                                                FROM Invoice_Product_Line_Item__c WHERE Serial_Number__c=:serialNumber]){
+                                                    serialToInvpMap.put(invp.Serial_Number__c, invp);
+                                                    serialToInvp.put(invp.Serial_Number__c, invp.Id);
+                                                }
+        
+        List<Delivery_Challan_Line_Item__c> dcItems = [
+            SELECT Id, Name, Serial_Number__c, Delivery_Challan__r.Name, Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c, Zydus_Price_Book_Entry__r.Credit_Note_Amount__c
+            FROM Delivery_Challan_Line_Item__c
+            WHERE Delivery_Challan__c IN :dcMap.keySet()
+            AND Is_Invoiced_To_Hospital__c = true
+            AND Is_Invoiced_By_parent_Account__c = false 
+            AND Serial_Number__c IN :serialToInvp.keySet()
+        ];
+        if (dcItems.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
+        
+        Set<String> serialNumbers = new Set<String>();
+        for (Delivery_Challan_Line_Item__c li : dcItems) {
+            if (String.isNotBlank(li.Serial_Number__c))
+                serialNumbers.add(li.Serial_Number__c);
+        }
+        if (serialNumbers.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
+        
+        List<Warehouse__c> whs = [
+            SELECT Id
+            FROM Warehouse__c
+            WHERE Account__r.Business_Owner__c = :UserInfo.getUserId()
+        ];
+        
+        List<Warehouse__c> cosigneeWH = [
+            SELECT Id
+            FROM Warehouse__c
+            WHERE Account__c= :consigneeId
+        ];
+        Set<Id> consigneewhIds = new Set<Id>();
+        for (Warehouse__c w : cosigneeWH) consigneewhIds.add(w.Id);
+        
+        Map<String, Decimal> consigneeWpMap = new Map<String, Decimal>();
+        for (Warehouse_Product_Line_Items__c wp : [
+            SELECT Id,
+            Serial_Number__c,
+            Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c
+            FROM Warehouse_Product_Line_Items__c
+            WHERE Connected_Warehouse__c IN :consigneewhIds
+            AND Serial_Number__c IN :serialNumbers
+            AND Status__c = 'Consumed'
+            AND Condition__c = 'Good'
+        ]) {
+            consigneeWpMap.put(wp.Serial_Number__c, wp.Delivery_Challan_Line_Item__r.Zydus_Price_Book_Entry__r.Unit_Price__c);
+        }
+        
+        
+        Set<Id> whIds = new Set<Id>();
+        for (Warehouse__c w : whs) whIds.add(w.Id);
+        if (whIds.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
+        
+        Map<String, Warehouse_Product_Line_Items__c> wpMap = new Map<String, Warehouse_Product_Line_Items__c>();
+        for (Warehouse_Product_Line_Items__c wp : [
+            SELECT Id,
+            Serial_Number__c,
+            Supplied_Date__c,
+            Status__c,
+            Condition__c,
+            Warehouse__r.Zydus_Product__r.Name,
+            Warehouse__r.Zydus_Product__r.HSN_Code__c,
+            Delivery_Challan_Line_Item__c
+            FROM Warehouse_Product_Line_Items__c
+            WHERE Connected_Warehouse__c IN :whIds
+            AND Serial_Number__c IN :serialNumbers
+            AND Status__c = 'Delivered'
+            AND Condition__c = 'Good'
+        ]) {
+            wpMap.put(wp.Serial_Number__c, wp);
+        }
+        
+        if (wpMap.isEmpty()) return new List<ChannelPartnerLineItemDTOScan>();
+        
+        String buyerState = [SELECT State__c FROM Account WHERE Id = :consigneeId].State__c;
+        String supplierState = [SELECT State__c FROM Account WHERE Id = :currAccount.Id].State__c;
+        String supplyType = buyerState == supplierState ? 'Intra-State' : 'Inter-State';
+        
+        Set<Id> hsnCodes = new Set<Id>();
+        for (Warehouse_Product_Line_Items__c wp : wpMap.values()) {
+            Id hsn = wp.Warehouse__r.Zydus_Product__r.HSN_Code__c;
+            if (hsn != null) hsnCodes.add(hsn);
+        }
+        
+        Date today = Date.today();
+        Map<String, HSN_Tax_Master_Link__c> taxRateMap = new Map<String, HSN_Tax_Master_Link__c>();
+        if (!hsnCodes.isEmpty()) {
+            for (HSN_Tax_Master_Link__c tax : [
+                SELECT HSN_Code__c, Supply_Type__c, CGST__c, SGST__c, IGST__c, Tax_Master__r.State__c
+                FROM HSN_Tax_Master_Link__c
+                WHERE HSN_Code__c IN :hsnCodes
+                AND Tax_Master__r.Is_Active__c = TRUE
+                AND Tax_Master__r.Effective_From__c <= :today
+                AND (Tax_Master__r.Effective_To__c = NULL OR Tax_Master__r.Effective_To__c >= :today)
+            ]) {
+                String key = tax.HSN_Code__c + '_' + supplierState + '_' + tax.Supply_Type__c;
+                taxRateMap.put(key, tax);
+            }
+        }
+        
+        List<ChannelPartnerLineItemDTOScan> result = new List<ChannelPartnerLineItemDTOScan>();
+        
+        for (Delivery_Challan_Line_Item__c li : dcItems) {
+            ChannelPartnerLineItemDTOScan dto = new ChannelPartnerLineItemDTOScan();
+            
+            dto.dcliId 		 = li.Id;
+            dto.serialNumber = li.Serial_Number__c;
+            dto.dcName       = li?.Name;
+            Decimal billDiscountAmount = li.Zydus_Price_Book_Entry__r.Bill_Discount_Amount__c;
+            dto.creditNoteAmount = li?.Zydus_Price_Book_Entry__r.Credit_Note_Amount__c;
+            
+            Warehouse_Product_Line_Items__c wp = wpMap.get(li.Serial_Number__c);
+            if (wp != null) {
+                dto.Id           = wp.Id;
+                dto.productName  = wp.Warehouse__r?.Zydus_Product__r?.Name;
+                dto.suppliedDate = wp.Supplied_Date__c;
+                dto.status       = wp.Status__c;
+                dto.condition    = wp.Condition__c;
+                Decimal unitPrice = consigneeWpMap.get(li.Serial_Number__c) !=null ? consigneeWpMap.get(li.Serial_Number__c) : 0;
+                dto.unitPrice = unitPrice;
+                Decimal cgst = 0, sgst = 0, igst = 0;
+                Id   hsnKey = wp.Warehouse__r.Zydus_Product__r.HSN_Code__c;
+                String taxKey = hsnKey + '_' + supplierState + '_' + supplyType;
+                
+                if (taxRateMap.containsKey(taxKey)) {
+                    HSN_Tax_Master_Link__c tx = taxRateMap.get(taxKey);
+                    if (supplyType == 'Intra-State') {
+                        cgst = unitPrice * (tx.CGST__c / 100);
+                        sgst = unitPrice * (tx.SGST__c / 100);
+                    } else {
+                        igst = unitPrice * (tx.IGST__c / 100);
+                    }
+                }
+                dto.netAmount= unitPrice + cgst + sgst + igst;
+                dto.cgst = cgst;
+                dto.sgst = sgst;
+                dto.igst = igst;
+                dto.billDiscountAmount = billDiscountAmount;
+            } else {
+                dto.Id           = null;
+                dto.productName  = null;
+                dto.suppliedDate = null;
+                dto.status       = null;
+                dto.condition    = null;
+                dto.netAmount    = 0;
+                dto.unitPrice    = 0;
+                dto.cgst         = 0;
+                dto.sgst         = 0;
+                dto.igst         = 0;
+                dto.billDiscountAmount = 0;
+            }
+            Invoice_Product_Line_Item__c invp = serialToInvpMap.get(li.Serial_Number__c);
+            if(invp != null){
+                dto.implantDate = invp.Date_of_Implant__c;
+                dto.patientGender=invp.Patient_Gender__c;
+                dto.patientFirstName = invp.Patient_First_Name__c;
+                dto.patientLastName = invp.Patient_Last_Name__c;
+                dto.patientAge = invp.Patient_Age__c;
+                dto.patientRegisterNumber = invp.Patient_Register_Number__c;
+                dto.cathNumber = invp.CATH_Number__c;
+                dto.ipNumber = invp.IP_Number__c;
+                dto.doctorName = invp.Doctor_Name__c;
             }
             result.add(dto);
         }
@@ -998,24 +1316,16 @@ public without sharing class InvoiceCreationController {
         try {
             Map<String, Object> data = (Map<String, Object>) JSON.deserializeUntyped(invoiceDataCP);
             
-            String implantDateStr    = (String) data.get('implantDateCP');
-            String ipNumber          = (String) data.get('ipNumberCP');
-            String cathNumber        = (String) data.get('cathNumberCP');
-            String firstName         = (String) data.get('patientFirstNameCP');
-            String lastName          = (String) data.get('patientLastNameCP');
-            String gender            = (String) data.get('patientGenderCP');
-            String doctorName        = (String) data.get('doctorInputCP');
             String invoiceType       = (String) data.get('invoiceType');
-            String patientRegisterNumberCP = (String) data.get('patientRegisterNumberCP');
             String accountId         = (String) data.get('selectedChannelPartner');
             String deliveryChallanId = (String) data.get('selectedDeliveryChallan');
             String comment           = data.containsKey('comment') ? (String) data.get('comment') : null;
-            String paymentMode       = (String) data.get('paymentMode');
-            Integer age              = data.get('patientAgeCP') != null 
-                ? Integer.valueOf(data.get('patientAgeCP')) : 0;
+            Boolean scanMode		 = (Boolean) data.get('invoiceCreationType');
             
-            Delivery_Challan__c dc = [SELECT Id, Consignee_Distributor__c, Consignor_Distributor__c FROM Delivery_Challan__c WHERE Id=:deliveryChallanId];
-            
+            Delivery_Challan__c dc;
+            if(!scanMode){
+                dc = [SELECT Id, Consignee_Distributor__c, Consignor_Distributor__c , Consignee_Distributor__r.State__c FROM Delivery_Challan__c WHERE Id=:deliveryChallanId];
+            }           
             
             List<Object> creditNoteObjs = (List<Object>) data.get('creditNoteId');
             List<Id> creditNoteIds = new List<Id>();
@@ -1051,40 +1361,32 @@ public without sharing class InvoiceCreationController {
             
             
             Invoice__c invoice = new Invoice__c(
-                Patient_First_Name__c   = firstName,
-                Patient_Last_Name__c    = lastName,
-                Patient_Age__c          = age,
-                Patient_Gender__c       = gender,
-                Patient_Register_Number__c = patientRegisterNumberCP,
-                Doctor_Name__c          = doctorName,
-                IP_Number__c            = ipNumber,
-                CATH_Number__c          = cathNumber,
                 Invoice_Type__c			= invoiceType,
-                Delivery_Challan__c     = deliveryChallanId,
-                Payment_Mode__c         = paymentMode,
+                Delivery_Challan__c = String.isNotBlank(deliveryChallanId) ? deliveryChallanId : null,
                 Comment_Remark__c       = comment,
-                Consignee_Dealer__c     = dc.Consignee_Distributor__c,
-                Consignor_Dealer__c		= dc.Consignor_Distributor__c,
-                InvoiceDate__c          = Date.today()
+                Consignee_Dealer__c     = scanMode ? accountId : dc.Consignee_Distributor__c,
+                Consignor_Dealer__c		= scanMode? currentAccount.Id : dc.Consignor_Distributor__c,
+                InvoiceDate__c          = Date.today(),
+                Region_Of_Sale__c = scanMode ? null : dc.Consignee_Distributor__r.State__c
             );
-            
-            if (String.isNotBlank(implantDateStr)) {
-                invoice.Date_of_Implant__c = Date.valueOf(implantDateStr);
-            }
             
             if (String.isNotBlank(selectedInvoice)) {
                 invoice.Is_Invoiced_By_Parent__c = true;
             }
             
-            String rtName=[SELECT RecordType.Name FROM Account WHERE ID =: dc.Consignee_Distributor__c].RecordType.Name;
+            String rtName=[SELECT RecordType.Name FROM Account WHERE ID =: accountId].RecordType.Name;
             
             Id invoiceRTId = recordTypeMap.get(rtName + ' Invoice');
             if (invoiceRTId == null) {
                 throw new AuraHandledException('No matching RecordType found for: ' + rtName);
             }
             invoice.RecordTypeId = invoiceRTId;
-            
-            invoice.Payment_Status__c = hasExpiredScheme ? 'Draft Invoice' : 'Invoice Created';
+            if(invoiceType !='FOC'){
+                invoice.Payment_Status__c = hasExpiredScheme ? 'Draft Invoice' : 'Invoice Created';
+            }else{
+                invoice.Payment_Status__c = 'Draft Invoice';
+			}
+  
             insert invoice;
             
             if (!creditNoteIds.isEmpty()) {
@@ -1122,6 +1424,16 @@ public without sharing class InvoiceCreationController {
                 Decimal sgst = 0, cgst = 0, igst = 0, netAmt = 0;
                 String scheme = 'No Scheme';
                 Decimal billDiscountAmount = 0;
+                String firstName;
+                String lastName;
+                String gender;
+                Decimal age;
+                String patientRegisterNumberCP;
+                String doctorName;
+                String cathNumber;
+                String ipNumber;
+                Date implantDate;
+                String dcliId;
                 
                 if (vals != null) {
                     if (vals.containsKey('SGST')) sgst = Decimal.valueOf(String.valueOf(vals.get('SGST')));
@@ -1130,6 +1442,22 @@ public without sharing class InvoiceCreationController {
                     if (vals.containsKey('netAmount')) netAmt = Decimal.valueOf(String.valueOf(vals.get('netAmount')));
                     if (vals.containsKey('scheme')) scheme = String.valueOf(vals.get('scheme'));
                     if (vals.containsKey('billDiscountAmount')) billDiscountAmount = Decimal.valueOf(String.valueOf(vals.get('billDiscountAmount')));
+                    if (vals.containsKey('patientAge')) age = Decimal.valueOf(String.valueOf(vals.get('patientAge')));
+                    if (vals.containsKey('patientFirstName')) firstName = String.valueOf(vals.get('patientFirstName'));
+                    if (vals.containsKey('patientLastName')) lastName = String.valueOf(vals.get('patientLastName'));
+                    if (vals.containsKey('patientRegisterNumber')) patientRegisterNumberCP = String.valueOf(vals.get('patientRegisterNumber'));
+                    if (vals.containsKey('ipNumber')) ipNumber = String.valueOf(vals.get('ipNumber'));
+                    if (vals.containsKey('cathNumber')) cathNumber = String.valueOf(vals.get('cathNumber'));
+                    if (vals.containsKey('doctorName')) doctorName = String.valueOf(vals.get('doctorName'));
+                    if (vals.containsKey('patientGender')) gender = String.valueOf(vals.get('patientGender'));
+                    if (vals.containsKey('dcliId')) dcliId = String.valueOf(vals.get('dcliId'));
+                    if (vals.containsKey('implantDate')) {
+                        String rawDate = String.valueOf(vals.get('implantDate')).trim();
+                        rawDate = rawDate.replaceAll('[^0-9\\-]', '');  
+                        if (String.isNotBlank(rawDate)) {
+                            implantDate = Date.valueOf(rawDate);
+                        }
+                    }
                 }
                 
                 invoiceProducts.add(new Invoice_Product_Line_Item__c(
@@ -1147,7 +1475,17 @@ public without sharing class InvoiceCreationController {
                     Unit_Price__c = item.Unit_Price__c,
                     Scheme__c = scheme,
                     Expiry_Date__c = item.Expiry_Date__c,
-                    Manufacture_Date__c = item.Manufactured_Date__c
+                    Manufacture_Date__c = item.Manufactured_Date__c,
+                    Delivery_Challan_Line_Item__c = dcliId,
+                    Patient_First_Name__c   = firstName,
+                    Patient_Last_Name__c    = lastName,
+                    Patient_Age__c          = age,
+                    Patient_Gender__c       = gender,
+                    Patient_Register_Number__c = patientRegisterNumberCP,
+                    Doctor_Name__c          = doctorName,
+                    IP_Number__c            = ipNumber,
+                    CATH_Number__c          = cathNumber,
+                    Date_Of_Implant__c		= implantDate
                 ));
             }
             
@@ -1203,15 +1541,15 @@ toUpdateInvoicedTOHsopitalList.add(cur);
             List<delivery_challan__Share> sharesToInsert = new List<delivery_challan__Share>();
             
             /*for (Id challanId : challanIds) {
-                delivery_challan__Share share = new delivery_challan__Share();
-                share.ParentId = challanId;
-                share.UserOrGroupId = userId;
-                share.AccessLevel = 'Edit';
-                share.RowCause = Schema.delivery_challan__Share.RowCause.Manual;
-                sharesToInsert.add(share);
-            }
-            
-            insert sharesToInsert;*/
+delivery_challan__Share share = new delivery_challan__Share();
+share.ParentId = challanId;
+share.UserOrGroupId = userId;
+share.AccessLevel = 'Edit';
+share.RowCause = Schema.delivery_challan__Share.RowCause.Manual;
+sharesToInsert.add(share);
+}
+
+insert sharesToInsert;*/
             
             List<delivery_challan_line_item__c> toUpdate = new List<delivery_challan_line_item__c>();
             for (delivery_challan_line_item__c dcli : [
@@ -1246,6 +1584,12 @@ toUpdateInvoicedTOHsopitalList.add(cur);
                 req.setProcessDefinitionNameOrId(System.Label.InvoiceApprovalProcess);
                 req.setComments('Invoice submitted for approval');
                 Approval.process(req);
+            }else if (invoice.Invoice_Type__c == 'FOC') {
+                Approval.ProcessSubmitRequest req = new Approval.ProcessSubmitRequest();
+                req.setObjectId(invoice.Id);
+                req.setProcessDefinitionNameOrId('Consignment_FOC_Approval');
+                req.setComments('Invoice submitted for approval');
+                Approval.ProcessResult res = Approval.process(req);
             }
             
             Invoice__c curInvoice = [
@@ -1342,76 +1686,6 @@ toUpdateInvoicedTOHsopitalList.add(cur);
             
         } catch (Exception e) {
             throw new AuraHandledException('Error while saving payment details: ' + e.getMessage());
-        }
-    }
-    
-    public static void checkOutstandingCreditLimit(List<Invoice__c> newRec) {
-        if (newRec.isEmpty()) return;
-        Id hospitalRecordTypeId = Schema.SObjectType.Invoice__c
-            .getRecordTypeInfosByDeveloperName()
-            .get('Hospital_Invoice')
-            .getRecordTypeId();
-        
-        List<Invoice__c> dealerInvoices = new List<Invoice__c>();
-        for (Invoice__c inv : newRec) {
-            if (inv.RecordTypeId != hospitalRecordTypeId) {
-                dealerInvoices.add(inv);
-            }
-        }
-        
-        if (dealerInvoices.isEmpty()) {
-            return; 
-        }
-        
-        Id currUserId = UserInfo.getUserId();
-        List<Account> accounts = [SELECT Id, Available_Credit_Limit__c FROM Account WHERE Business_Owner__c = :currUserId LIMIT 1];
-        
-        if (accounts.isEmpty()) {
-            return;
-        }
-        
-        Account dealerAcc = accounts[0];
-        
-        List<Invoice__c> existingInvoices = [SELECT Id, Total_Pending_Amount__c FROM Invoice__c WHERE Consignee_Dealer__c = :dealerAcc.Id];
-        
-        Decimal totalPending = 0;
-        for (Invoice__c inv : existingInvoices) {
-            totalPending += inv.Total_Pending_Amount__c != null ? inv.Total_Pending_Amount__c : 0;
-        }
-        
-        Set<Id> newInvoiceIds = new Set<Id>();
-        for (Invoice__c inv : dealerInvoices) {
-            if (inv.Id != null) newInvoiceIds.add(inv.Id);
-        }
-        
-        Id creditNoteRTId = [SELECT Id FROM RecordType WHERE SobjectType = 'Credit_Note__c' AND DeveloperName = 'Invoice' LIMIT 1].Id;
-        
-        Map<Id, Decimal> creditNoteMap = new Map<Id, Decimal>();
-        
-        if (!newInvoiceIds.isEmpty()) {
-            for (Credit_Note__c note : [
-                SELECT Invoice__c, Amount__c
-                FROM Credit_Note__c
-                WHERE Invoice__c IN :newInvoiceIds AND RecordTypeId = :creditNoteRTId
-            ]) {
-                Decimal amount = note.Amount__c != null ? note.Amount__c : 0;
-                creditNoteMap.put(note.Invoice__c,creditNoteMap.containsKey(note.Invoice__c) ? creditNoteMap.get(note.Invoice__c) + amount : amount);
-            }
-        }
-        
-        Decimal adjustedNew = 0;
-        for (Invoice__c inv : dealerInvoices) {
-            Decimal orig = inv.Total_Pending_Amount__c != null ? inv.Total_Pending_Amount__c : 0;
-            Decimal credit = creditNoteMap.containsKey(inv.Id) ? creditNoteMap.get(inv.Id) : 0;
-            adjustedNew += (orig - credit);
-        }
-        
-        Decimal projected = totalPending + adjustedNew;
-        
-        if (projected > dealerAcc.Available_Credit_Limit__c) {
-            for (Invoice__c inv : dealerInvoices) {
-                inv.addError('⚠️ Cannot create invoice: Credit limit exceeded.');
-            }
         }
     }    
 }

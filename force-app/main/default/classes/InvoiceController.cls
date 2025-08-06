@@ -1,5 +1,16 @@
 public with sharing class InvoiceController {
     @AuraEnabled(cacheable=true)
+    public static List<Credit_Note__c> getCreditNotesByInvoice(Id recordId) {
+        return [
+            SELECT Id, Name, Amount__c
+            FROM Credit_Note__c 
+            WHERE Invoice__c = :recordId
+            ORDER BY CreatedDate DESC
+        ];
+    }
+    
+    
+    @AuraEnabled(cacheable=true)
     public static InvoiceWrapper getInvoiceDetails(Id recordId) {
         // Return empty wrapper if recordId is null
         if (recordId == null) {
@@ -7,61 +18,66 @@ public with sharing class InvoiceController {
         }
         
         try {
-            List<Invoice__c> invoices = [
-                SELECT 
-                    Id, CATH_Number__c, Comment__c, Comment_Remark__c, 
-                    Consignee_Dealer__c, Hospital__c, Consignor_Dealer__c, Date_of_Implant__c, Delivery_Challan__c,Doctor_Name__c,
-                	Invoice_Closed__c, InvoiceDate__c, Name, InvoiceNumber__c, Invoice_Type__c, IP_Number__c, is_Invoiced_By_Parent__c, OwnerId,
-                	Patient_Age__c, Patient_First_Name__c, Patient_Gender__c, Patient_Last_Name__c,
-                    Patient_Name__c, Payment_Mode__c, Payment_Status__c, RecordTypeId, Status__c,
-                    Total_Amount__c, Total_CGST__c,Total_Collected_Amount__c, Total_IGST__c, Total_Pending_Amount__c, Total_SGST__c,  Invoice_Due_Date__c,
-                
-                
-                    Consignor_Dealer__r.Name,
-                    Consignor_Dealer__r.Address__c,
-                    Consignor_Dealer__r.City__c,
-                    Consignor_Dealer__r.State__c,
-                    Consignor_Dealer__r.Account_Pin_Code__c,
-                    Consignor_Dealer__r.Drug_Licence_Number__c,
-                    Consignor_Dealer__r.GST_Number__c,
-                    Consignor_Dealer__r.PAN_Number__c,
-                    Consignee_Dealer__r.Name,
-                    Consignee_Dealer__r.Address__c,
-                    Consignee_Dealer__r.State__c,
-                    Consignee_Dealer__r.City__c,
-                    Consignee_Dealer__r.Account_Pin_Code__c,
-                    Consignee_Dealer__r.Drug_Licence_Number__c,
-                    Consignee_Dealer__r.PAN_Number__c,
-                    Consignee_Dealer__r.GST_Number__c,
-                    Consignee_Dealer__r.Payment_Term__c,
-                    
-                    (
-                        SELECT Id, 
-                               Scheme__c,
-                               SGST__c,
-                               IGST__c, 
-                               CGST__c,
-                        	   	Bill_Discount_Amount__c,
-                        Before_Tax_Amount__c,
-                               Net_Amount__c,
-                               Unit_Price__c,
-                               Serial_Number__c,
-                               Batch_Number__c,
-                               Manufacture_Date__c,
-                               Expiry_Date__c,
-                               HSN__c,
-                               Zydus_Product__c,
-                               Zydus_Product__r.Name,
-                               Zydus_Product__r.Length__c,
-                               Zydus_Product__r.Diameter__c,
-                               Zydus_Product__r.Material_Description__c
-                        FROM Invoice_Product_Line_Items__r
-                        ORDER BY Serial_Number__c ASC NULLS LAST
-                    )
-                FROM Invoice__c
-                WHERE Id = :recordId
-                LIMIT 1
-            ];
+            List<Invoice__c> invoices = [SELECT 
+    Id, Comment__c, Comment_Remark__c, 
+    Consignee_Dealer__c, Hospital__c, Consignor_Dealer__c, Delivery_Challan__c,
+    Invoice_Closed__c, InvoiceDate__c, Name, InvoiceNumber__c, Invoice_Type__c, is_Invoiced_By_Parent__c, OwnerId,
+    Payment_Mode__c, Payment_Status__c, RecordTypeId, Status__c,
+    Total_Amount__c, Total_CGST__c,Total_Collected_Amount__c, Total_IGST__c, Total_Pending_Amount__c, Total_SGST__c,  Invoice_Due_Date__c,
+
+    Consignor_Dealer__r.Name,
+    Consignor_Dealer__r.Address__c,
+    Consignor_Dealer__r.City__c,
+    Consignor_Dealer__r.State__c,
+    Consignor_Dealer__r.Account_Pin_Code__c,
+    Consignor_Dealer__r.Drug_Licence_Number__c,
+    Consignor_Dealer__r.GST_Number__c,
+    Consignor_Dealer__r.PAN_Number__c,
+    Consignee_Dealer__r.Name,
+    Consignee_Dealer__r.Address__c,
+    Consignee_Dealer__r.State__c,
+    Consignee_Dealer__r.City__c,
+    Consignee_Dealer__r.Account_Pin_Code__c,
+    Consignee_Dealer__r.Drug_Licence_Number__c,
+    Consignee_Dealer__r.PAN_Number__c,
+    Consignee_Dealer__r.GST_Number__c,
+    Consignee_Dealer__r.Payment_Term__c,
+    
+    (
+        SELECT Id, 
+               Scheme__c,
+               SGST__c,
+               IGST__c, 
+               CGST__c,
+               Bill_Discount_Amount__c,
+               Before_Tax_Amount__c,
+               Net_Amount__c,
+               Unit_Price__c,
+               Serial_Number__c,
+               Batch_Number__c,
+               Manufacture_Date__c,
+               Expiry_Date__c,
+               HSN__c,
+               Zydus_Product__c,
+               Zydus_Product__r.Name,
+               Zydus_Product__r.Length__c,
+               Zydus_Product__r.Diameter__c,
+               Zydus_Product__r.Material_Description__c,
+               
+        
+               Delivery_Challan_Line_Item__r.Name,
+               
+            
+               Delivery_Challan_Line_Item__r.Delivery_Challan__r.DC_Generated_Date__c,
+        
+        		Patient_Name__c, Patient_Age__c	, Patient_Gender__c, Date_of_Implant__c, Doctor_Name__c, IP_Number__c, CATH_Number__c, Patient_Register_Number__c
+               
+        FROM Invoice_Product_Line_Items__r
+        ORDER BY Serial_Number__c ASC NULLS LAST
+    )
+FROM Invoice__c
+WHERE Id = :recordId
+    LIMIT 1];
             
             // If no invoice found, return empty wrapper
             if (invoices.isEmpty()) {

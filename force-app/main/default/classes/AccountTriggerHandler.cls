@@ -6,7 +6,6 @@ public class AccountTriggerHandler {
             if (acc.Business_Owner__c == currentUserId && oldAccountMap.containsKey(acc.Id)) {
                 Account oldAcc = oldAccountMap.get(acc.Id);
                 
-                // If Credit_Limit_Amount__c has changed
                 if (acc.Credit_Limit_Amount__c != oldAcc.Credit_Limit_Amount__c) {
                     acc.addError('You are not authorized to change the credit limit.');
                 }
@@ -15,25 +14,44 @@ public class AccountTriggerHandler {
     }
     public static void handlePrizeBookSharing(List<Account> newAccounts, Map<Id, Account> oldMap) {
         List<Zydus_Price_Book__Share> sharesToInsert = new List<Zydus_Price_Book__Share>();
-
+        
+        Set<Id> businessOwnerIds = new Set<Id>();
+        for (Account acc : newAccounts) {
+            if (acc.Business_owner__c != null) {
+                businessOwnerIds.add(acc.Business_owner__c);
+            }
+        }
+        
+        Map<Id, String> userIdToRoleName = new Map<Id, String>();
+        for (User u : [
+            SELECT Id, UserRole.Name 
+            FROM User 
+            WHERE Id IN :businessOwnerIds
+        ]) {
+            userIdToRoleName.put(u.Id, u.UserRole != null ? u.UserRole.Name : null);
+        }
+        
         for (Account acc : newAccounts) {
             Account oldAcc = oldMap != null ? oldMap.get(acc.Id) : null;
-
+            
             Boolean isInsert = oldAcc == null;
             Boolean priceBookChanged = oldAcc != null && acc.Zydus_Price_Book__c != oldAcc.Zydus_Price_Book__c;
-
+            
             if (isInsert || priceBookChanged) {
                 if (acc.Zydus_Price_Book__c != null && acc.Business_owner__c != null) {
+                    String roleName = userIdToRoleName.get(acc.Business_owner__c);
+                    String accessLevel = (roleName == 'Super Distributor') ? 'Edit' : 'Read';
+                    
                     sharesToInsert.add(new Zydus_Price_Book__Share(
                         ParentId = acc.Zydus_Price_Book__c,
                         UserOrGroupId = acc.Business_owner__c,
-                        AccessLevel = 'Edit',
+                        AccessLevel = accessLevel,
                         RowCause = Schema.Zydus_Price_Book__Share.RowCause.Manual
                     ));
                 }
             }
         }
-
+        
         if (!sharesToInsert.isEmpty()) {
             try {
                 insert sharesToInsert;
@@ -42,6 +60,7 @@ public class AccountTriggerHandler {
             }
         }
     }
+    
     public static void validateAccountCreation(List<Account> newAccounts) {
         User currentUser = [SELECT UserRole.Name, Profile.Name FROM User WHERE Id = :UserInfo.getUserId()];
         String userRole = currentUser.UserRole != null ? currentUser.UserRole.Name : '';
@@ -113,6 +132,76 @@ public class AccountTriggerHandler {
             }
             
             insert warehousesToCreate;
+            Set<Id> waerhouseaccountIds = new Set<Id>();
+            for (Warehouse__c wh : warehousesToCreate) {
+                if (wh.Account__c != null) {
+                    waerhouseaccountIds.add(wh.Account__c);
+                }
+            }
+            
+            Map<Id, Account> fullAccountMap = new Map<Id, Account>(
+                [SELECT Id, Name, ParentId, Business_owner__c, 
+                 Parent.ParentId, 
+                 Parent.Business_owner__c, 
+                 Parent.Parent.Business_owner__c 
+                 FROM Account 
+                 WHERE Id IN :waerhouseaccountIds]
+            );
+            
+            Set<Id> allBusinessOwnerIds = new Set<Id>();
+            for (Account acc : fullAccountMap.values()) {
+                if (acc.Business_owner__c != null) {
+                    allBusinessOwnerIds.add(acc.Business_owner__c);
+                }
+                if (acc.Parent != null && acc.Parent.Business_owner__c != null) {
+                    allBusinessOwnerIds.add(acc.Parent.Business_owner__c);
+                }
+                if (acc.Parent != null && acc.Parent.Parent != null && acc.Parent.Parent.Business_owner__c != null) {
+                    allBusinessOwnerIds.add(acc.Parent.Parent.Business_owner__c);
+                }
+            }
+            
+            Map<Id, User> userMap = new Map<Id, User>(
+                [SELECT Id, UserRole.Name FROM User WHERE Id IN :allBusinessOwnerIds]
+            );
+            
+            List<Warehouse__Share> sharesToInsert = new List<Warehouse__Share>();
+            
+            for (Warehouse__c wh : warehousesToCreate) {
+                Account acc = fullAccountMap.get(wh.Account__c);
+                if (acc == null || acc.Business_owner__c == null) continue;
+                
+                User ownerUser = userMap.get(acc.Business_owner__c);
+                if (ownerUser == null || ownerUser.UserRole == null) continue;
+                
+                String roleName = ownerUser.UserRole.Name;
+                Id targetUserId;
+                
+                if (roleName == 'Distributor') {
+                    if (acc.Parent != null) {
+                        targetUserId = acc.Parent.Business_owner__c;
+                    }
+                } else if (roleName == 'Sub Distributor') {
+                    if (acc.Parent != null && acc.Parent.Parent != null) {
+                        targetUserId = acc.Parent.Parent.Business_owner__c;
+                    }
+                } else if (roleName == 'Super Distributor') {
+                    continue;
+                }
+                
+                if (targetUserId != null) {
+                    Warehouse__Share share = new Warehouse__Share();
+                    share.ParentId = wh.Id;
+                    share.UserOrGroupId = targetUserId;
+                    share.AccessLevel = 'Edit';
+                    share.RowCause = Schema.Warehouse__Share.RowCause.Manual;
+                    sharesToInsert.add(share);
+                }
+            }
+            
+            if (!sharesToInsert.isEmpty()) {
+                insert sharesToInsert;
+            }
             
             Set<Id> accountIds = accountMapForContact.keySet();
             Map<Id, Account> accountsWithPricebooks = new Map<Id, Account>(
@@ -128,7 +217,7 @@ public class AccountTriggerHandler {
             
             Map<Id, List<Zydus_Price_Book_Entry__c>> pricebookEntriesMap = new Map<Id, List<Zydus_Price_Book_Entry__c>>();
             for (Zydus_Price_Book_Entry__c pbe : [
-                SELECT Id, Zydus_Product__c, Zydus_Price_Book__c, List_Price__c
+                SELECT Id, Zydus_Product__c, Zydus_Price_Book__c
                 FROM Zydus_Price_Book_Entry__c
                 WHERE Zydus_Product__c IN :pricebookIds AND Is_Active__c = true
             ]) {
@@ -226,6 +315,18 @@ public class AccountTriggerHandler {
                 update contractsToInsert;
             } catch (Exception e) {
                 System.debug('Error processing contracts: ' + e.getMessage());
+            }
+        }
+    }
+    public static void preventBusinessOwnerPriceBookChange(List<Account> newAccounts, List<Account> oldAccounts) {
+        Id currentUserId = UserInfo.getUserId();
+        for (Integer i = 0; i < newAccounts.size(); i++) {
+            Account newAccount = newAccounts[i];
+            Account oldAccount = oldAccounts[i];
+            if (newAccount.Business_owner__c == currentUserId) {
+                if (newAccount.Zydus_Price_Book__c != oldAccount.Zydus_Price_Book__c) {
+                    newAccount.Zydus_Price_Book__c.addError('You cannot change the Price Book for your own Account.');
+                }
             }
         }
     }

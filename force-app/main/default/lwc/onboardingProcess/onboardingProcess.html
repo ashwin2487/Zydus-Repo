@@ -1,9 +1,13 @@
 <template>
     <lightning-card>
         <lightning-radio-group name="onboardingType" label="Select Onboarding Type" options={onboardingOptions}
-            value={selectedOnboardingType} type="radio" onchange={handleOnboardingTypeChange} 
+            value={selectedOnboardingType} type="radio" onchange={handleOnboardingTypeChange}
             class="slds-m-left_medium">
         </lightning-radio-group>
+
+        <p class="slds-text-body_regular slds-m-left_medium slds-m-top_small slds-text-color_error">
+            *Note: Please keep the Price Book ready before starting the onboarding process.
+        </p>
     </lightning-card>
 
     <!-- Distributor Onboarding Form -->
@@ -172,6 +176,7 @@
                         <lightning-combobox label="Pricebook Mapping" value={selectedPriceBook}
                             options={pricebookOptions} onchange={handlePriceBookChange} required>
                         </lightning-combobox>
+
                     </div>
                     <div class="slds-col slds-size_1-of-2">
                         <lightning-input label="Credit Limit Amount" value={creditLimitDisplay}
@@ -189,9 +194,16 @@
                         </lightning-input>
                     </div>
                     <div class="slds-col slds-size_1-of-2">
-                        <lightning-input type="number" label="Payment Term(In Days)" value={paymentTerm} onchange={handlePaymentTermChange}
-                            data-id="paymentTerm" placeholder="Enter payment term in days..." required>
+                        <lightning-input type="number" label="Payment Term(In Days)" value={paymentTerm}
+                            onchange={handlePaymentTermChange} data-id="paymentTerm"
+                            placeholder="Enter payment term in days..." required>
                         </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox label="Payment Mode" value={selectedPaymentMode}
+                            options={paymentModeOptions} onchange={handlePaymentModeChange} data-id="paymentMode"
+                            placeholder="Select payment mode" required>
+                        </lightning-combobox>
                     </div>
                 </div>
             </div>
@@ -203,7 +215,7 @@
 
             <div class="slds-grid slds-wrap slds-gutters">
                 <div class="slds-col slds-size_1-of-2">
-                    <lightning-combobox label="Zydus Mapping" value={zydusMapping} options={zydusOptions}
+                    <lightning-combobox label="RSO Wherehouse mapping" value={zydusMapping} options={zydusOptions}
                         onchange={handleZydusMappingChange} required>
                     </lightning-combobox>
                 </div>
@@ -427,8 +439,8 @@
             </div>
             <div class="slds-grid slds-wrap slds-gutters">
                 <div class="slds-col slds-size_1-of-2">
-                    <lightning-combobox label="Pricebook Mapping" value={selectedPriceBook} options={pricebookOptions}
-                        onchange={handlePriceBookChange} required>
+                    <lightning-combobox label="Pricebook Mapping" value={selectedPriceBook}
+                        options={pricebookOptionsHosp} onchange={handlePriceBookChange} required>
                     </lightning-combobox>
                 </div>
             </div>
@@ -459,11 +471,6 @@
 
                 </div>
             </div>
-
-            <lightning-dual-listbox label="Product Mapping" source-label="Available" selected-label="Selected"
-                options={productOptions} value={selectedProducts} onchange={handleProductChange}>
-            </lightning-dual-listbox>
-
             <div class="slds-box slds-theme_default slds-m-top_medium">
                 <h2 class="slds-text-heading_small">Operational Details</h2>
                 <div class="slds-grid slds-wrap slds-gutters">
@@ -472,8 +479,9 @@
                         </lightning-input>
                     </div>
                     <div class="slds-col slds-size_1-of-2">
-                        <lightning-input type="number" label="Payment Term(In Days)" value={paymentTerm} onchange={handlePaymentTermChange}
-                            data-id="paymentTerm" placeholder="Enter payment term in days..." required>
+                        <lightning-input type="number" label="Payment Term(In Days)" value={paymentTerm}
+                            onchange={handlePaymentTermChange} data-id="paymentTerm"
+                            placeholder="Enter payment term in days..." required>
                         </lightning-input>
                     </div>
                     <div class="slds-col slds-size_1-of-2">
@@ -481,34 +489,32 @@
                             onchange={handleInvoiceCommentChange}>
                         </lightning-textarea>
                     </div>
-                        <div class="slds-col slds-size_1-of-2">
-                            <lightning-combobox name="Select Comment Options Level" label="Select Comment Options Level"
-                                placeholder="Select Comment Options Level" options={commentOptions}
-                                onchange={handleCommentOptionsChange} required>
-                            </lightning-combobox>
-                            <template if:true={commentOptionSelected.length}>
-                                <div class="slds-m-top_small">
-                                    <h3><strong>Selected Comment Level</strong></h3>
-                                    <div class="slds-pill_container" style="background-color: transparent; border:none">
-                                        <template for:each={commentOptionSelected} for:item="commentoption">
-                                            <span key={commentoption.value}
-                                                class="slds-pill custom-pill slds-m-right_x-small slds-p-right_small">
-                                                <span
-                                                    class="slds-pill__label custom-pill-label">{commentoption.label}</span>
-                                                <lightning-button-icon icon-name="utility:close"
-                                                    alternative-text="Remove" variant="bare"
-                                                    class="slds-m-left_x-small custom-pill-close"
-                                                    data-value={commentoption.value}
-                                                    onclick={handleCommentOptionsRemove}>
-                                                </lightning-button-icon>
-                                            </span>
-                                        </template>
-                                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox name="Select Comment Options Level" label="Select Comment Options Level"
+                            placeholder="Select Comment Options Level" options={commentOptions}
+                            onchange={handleCommentOptionsChange} required>
+                        </lightning-combobox>
+                        <template if:true={commentOptionSelected.length}>
+                            <div class="slds-m-top_small">
+                                <h3><strong>Selected Comment Level</strong></h3>
+                                <div class="slds-pill_container" style="background-color: transparent; border:none">
+                                    <template for:each={commentOptionSelected} for:item="commentoption">
+                                        <span key={commentoption.value}
+                                            class="slds-pill custom-pill slds-m-right_x-small slds-p-right_small">
+                                            <span
+                                                class="slds-pill__label custom-pill-label">{commentoption.label}</span>
+                                            <lightning-button-icon icon-name="utility:close" alternative-text="Remove"
+                                                variant="bare" class="slds-m-left_x-small custom-pill-close"
+                                                data-value={commentoption.value} onclick={handleCommentOptionsRemove}>
+                                            </lightning-button-icon>
+                                        </span>
+                                    </template>
                                 </div>
-                            </template>
-                        </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
+            </div>
             <div class="slds-box slds-theme_default slds-m-top_medium">
                 <div class="slds-grid slds-wrap slds-gutters">
                     <div class="slds-col slds-size_1-of-2">
@@ -516,7 +522,8 @@
                         </lightning-input>
                     </div>
                     <div class="slds-col slds-size_1-of-2">
-                        <lightning-input  label="Phyzii Hopital Id" value={phyziiId} onchange={handlephyziiIdChange} required></lightning-input >
+                        <lightning-input label="Phyzii Hopital Id" value={phyziiId} onchange={handlephyziiIdChange}
+                            required></lightning-input>
                     </div>
                 </div>
             </div>
@@ -543,13 +550,13 @@
                             <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
                                 <div class="slds-col">
                                     <lightning-input type="file" label={doc.label} onchange={handleFileUpload}
-                                        data-key={doc.key} data-id={doc.dataId}>
+                                        data-key={doc.key} data-id={doc.dataId} required>
                                     </lightning-input>
                                 </div>
                                 <div class="slds-col slds-p-left_small">
                                     <template if:true={doc.fileName}>
                                         <div class="slds-grid slds-grid_vertical-align-center">
-                                            <span class="slds-text-body_small">📄 {doc.fileName}</span>
+                                            <span>📄 {doc.fileName}</span>
                                             <lightning-button-icon icon-name="utility:delete"
                                                 alternative-text="Remove file" onclick={removeFile} data-key={doc.key}
                                                 class="slds-m-left_x-small" title="Remove file">
@@ -558,7 +565,6 @@
                                     </template>
                                 </div>
                             </div>
-
                             <lightning-input type="checkbox" label={doc.checkboxLabel} checked={doc.confirmed} disabled>
                             </lightning-input>
                         </div>

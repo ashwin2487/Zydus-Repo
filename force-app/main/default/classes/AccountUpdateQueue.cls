@@ -1,29 +1,38 @@
-public class AccountUpdateQueue implements Queueable {
+public with sharing class AccountUpdateQueue implements Queueable {
     private Map<Id, Id> accountUserMap;
-
+    
     public AccountUpdateQueue(Map<Id, Id> accountUserMap) {
         this.accountUserMap = accountUserMap;
     }
-
+    
     public void execute(QueueableContext context) {
-        List<Account> updates = new List<Account>();
-        for (Id accId : accountUserMap.keySet()) {
-            updates.add(new Account(
-                Id = accId,
-                Business_Owner__c = accountUserMap.get(accId)
-            ));
+        Map<Id, Id> accountToParentIdMap = new Map<Id, Id>();
+        for (Account acc : [SELECT Id, ParentId FROM Account WHERE Id IN :accountUserMap.keySet()]) {
+            if (acc.ParentId != null) {
+                accountToParentIdMap.put(acc.Id, acc.ParentId);
+            }
         }
-
-        if (!updates.isEmpty()) {
-            update updates;
-            updates = [
+        
+        List<Account> accountsToUpdate = new List<Account>();
+        
+        for (Id accId : accountUserMap.keySet()) {
+            if (accId != null) {
+                accountsToUpdate.add(new Account(
+                    Id = accId,
+                    Business_Owner__c = accountUserMap.get(accId),
+                    OwnerId = accountUserMap.get(accId)
+                ));
+            }
+        }
+        if (!accountsToUpdate.isEmpty()) {
+            update accountsToUpdate;
+            accountsToUpdate = [
                 SELECT Id, Business_Owner__c, ParentId, OwnerId, Hospital_Mapping__c 
                 FROM Account 
-                WHERE Id = :updates[0].Id
+                WHERE Id = :accountsToUpdate[0].Id
             ];
-            AccountSharingHandler.shareWithBusinessOwners(updates);
         }
-
+        
         List<Warehouse__c> toupdate = new List<Warehouse__c>();
         for (Warehouse__c curWarehouse : [
             SELECT Id, OwnerId, Account__c 
@@ -33,12 +42,10 @@ public class AccountUpdateQueue implements Queueable {
             curWarehouse.OwnerId = accountUserMap.get(curWarehouse.Account__c);
             toupdate.add(curWarehouse);
         }
-
+        
         if (!toupdate.isEmpty()) {
             update toupdate;
         }
-
-        // Insert Account_Hospital__c from Hospital_Mapping__c field
         List<Account_Hospital__c> junctionsToInsert = new List<Account_Hospital__c>();
         for (Account acc : [
             SELECT Id, Hospital_Mapping__c 
@@ -58,11 +65,11 @@ public class AccountUpdateQueue implements Queueable {
                 }
             }
         }
-
+        
         if (!junctionsToInsert.isEmpty()) {
             insert junctionsToInsert;
         }
-
+        
         if (!accountUserMap.isEmpty()) {
             System.enqueueJob(new FirstOrderCreationQueue(new List<Id>(accountUserMap.keySet())));
         }

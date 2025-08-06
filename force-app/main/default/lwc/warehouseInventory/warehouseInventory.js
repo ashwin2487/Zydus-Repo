@@ -1,6 +1,7 @@
 import { LightningElement, track } from 'lwc';
 import getWarehousesOptions from '@salesforce/apex/WarehouseInventoryController.getWarehousesOptions';
 import getInventoryData from '@salesforce/apex/WarehouseInventoryController.getInventoryData';
+import getInventoryDataForInTransit from '@salesforce/apex/WarehouseInventoryController.getInventoryDataForInTransit';
 import getWPLIs from '@salesforce/apex/WarehouseInventoryController.getWPLIs';
 import createReverseSupplyOrders from '@salesforce/apex/WarehouseInventoryController.createReverseSupplyOrders';
 import shouldRSObtnVisible from '@salesforce/apex/WarehouseInventoryController.shouldRSObtnVisible';
@@ -10,6 +11,7 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
     @track warehouseOptions = [];
     @track selectedWarehouseId;
     @track tableData = [];
+    @track tableDataForInTransit = [];
     @track showReverseTable = false;
     @track damagedProducts = [];
     @track isProceedDisabled = true;
@@ -18,7 +20,7 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
     @track selectedWpliIds = [];
     @track selectedCondition = 'All';
     @track isLoading = false;
-    @track selectedStatus = 'Free';
+    @track selectedStatus = 'Available';
     @track emptyArray = [];
     @track reverseSOTableData = [];
     showReverseSOBtn = false;
@@ -27,7 +29,7 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
     connectedCallback() {
         getWarehousesOptions()
             .then(result => {
-                console.log('Warehousese:',result);
+                console.log('Warehousese:', result);
                 this.warehouseOptions = result.map(w => ({
                     label: w.Name,
                     value: w.Id
@@ -39,7 +41,32 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
     }
 
     columns = [
-        { label: 'Warehouse', fieldName: 'warehouseName', type: 'text', sortable: true, initialWidth: 200 },
+        
+        { label: 'Connected Warehouse', fieldName: 'warehouseName', type: 'text', sortable: true, initialWidth: 200, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Product Name', fieldName: 'productName', type: 'text', sortable: true, initialWidth: 200, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Material Code', fieldName: 'materialCode', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Brand', fieldName: 'brand', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Size', fieldName: 'size', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'UOM', fieldName: 'uom', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Batch', fieldName: 'batchNumber', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Serial Number', fieldName: 'serialNumber', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Manufactured Date', fieldName: 'manufacturedDate', type: 'date', sortable: true, initialWidth: 180, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Expiry Date', fieldName: 'expiryDate', type: 'date', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Expiry Category', fieldName: 'expiryCategory', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Balance Exp Days', fieldName: 'balanceExpDays', type: 'number', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Total Value (MRP)', fieldName: 'totalValueMRP', type: 'currency', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Expired Value', fieldName: 'expiredValue', type: 'currency', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Usable Value', fieldName: 'usableValue', type: 'currency', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Last Usage Date', fieldName: 'lastUsageDate', type: 'date', sortable: true, initialWidth: 200, cellAttributes: { class: { fieldName: 'statusClass' } } }, 
+        { label: 'Distributor', fieldName: 'distributor', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Hospital', fieldName: 'hospital', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },
+        { label: 'Stock Stage', fieldName: 'stockStage', type: 'text', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } },            
+        { label: 'In Transit Damaged', fieldName: 'inTransitDamaged', type: 'number', sortable: true, initialWidth: 200, cellAttributes: { class: { fieldName: 'statusClass' } } },  
+        { label: 'Restricted', fieldName: 'restricted', type: 'number', sortable: true, initialWidth: 150, cellAttributes: { class: { fieldName: 'statusClass' } } }
+    ];
+    columnsForInTransit = [
+        { label: 'Connected Warehouse', fieldName: 'warehouseName', type: 'text', sortable: true, initialWidth: 200 },
+        { label: 'Distributor', fieldName: 'distributor', type: 'text', sortable: true, initialWidth: 150 },
         { label: 'Product Name', fieldName: 'productName', type: 'text', sortable: true, initialWidth: 200 },
         { label: 'Material Code', fieldName: 'materialCode', type: 'text', sortable: true, initialWidth: 150 },
         { label: 'Brand', fieldName: 'brand', type: 'text', sortable: true, initialWidth: 150 },
@@ -53,13 +80,7 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
         { label: 'Balance Exp Days', fieldName: 'balanceExpDays', type: 'number', sortable: true, initialWidth: 150 },
         { label: 'Total Value (MRP)', fieldName: 'totalValueMRP', type: 'currency', sortable: true, initialWidth: 150 },
         { label: 'Expired Value', fieldName: 'expiredValue', type: 'currency', sortable: true, initialWidth: 150 },
-        { label: 'Usable Value', fieldName: 'usableValue', type: 'currency', sortable: true, initialWidth: 150 },
-        { label: 'Last Usage Date', fieldName: 'lastUsageDate', type: 'date', sortable: true, initialWidth: 200 },
-        { label: 'Distributor', fieldName: 'distributor', type: 'text', sortable: true, initialWidth: 150 },
-        { label: 'Hospital', fieldName: 'hospital', type: 'text', sortable: true, initialWidth: 150 },
-        { label: 'Stock Stage', fieldName: 'stockStage', type: 'text', sortable: true, initialWidth: 150 },
-        { label: 'In Transit Damaged', fieldName: 'inTransitDamaged', type: 'number', sortable: true, initialWidth: 200 },
-        { label: 'Restricted', fieldName: 'restricted', type: 'number', sortable: true, initialWidth: 150 }
+        { label: 'Usable Value', fieldName: 'usableValue', type: 'currency', sortable: true, initialWidth: 150 }
     ];
 
     wpliColumns = [
@@ -82,15 +103,14 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
     ];
 
     statusOptions = [
-        { label: 'Free', value: 'Free' },
+        { label: 'Available', value: 'Available' },
         { label: 'Committed', value: 'Committed' },
-        { label: 'In Transit', value: 'In Transit' },
-        { label: 'Consumed', value: 'Consumed' },
-        { label: 'Delivered', value: 'Delivered' },
-        { label: 'Material Returned', value: 'Material Returned' }
+        { label: 'In Transit', value: 'In Transit' }
     ];
 
     handleWarehouseChange(event) {
+        this.tableData = [];
+        this.tableDataForInTransit = [];
         this.selectedWarehouseId = event.detail.value;
         this.isWarehouseSelected = true;
         this.checkVisibility();
@@ -99,7 +119,24 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
 
     handleStatusOptionsChange(event) {
         this.selectedStatus = event.detail.value;
-        this.fetchInventory();
+        if (this.selectedStatus == 'In Transit') {
+            this.isLoading = true;
+            getInventoryDataForInTransit({ warehouseId: [this.selectedWarehouseId] })
+                .then(data => {
+                    this.tableDataForInTransit = data;
+                    this.tableData = [];
+                    this.showReverseTable = false;
+                    this.damagedProducts = [];
+                    this.isProceedDisabled = true;
+                    this.isLoading = false;
+                }).catch(error => {
+                    this.isLoading = false;
+                    console.error('Error fetching inventory:', error);
+                });
+        } else {
+            this.tableDataForInTransit = [];
+            this.fetchInventory();
+        }
     }
 
     fetchInventory() {
@@ -111,6 +148,22 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
                 this.damagedProducts = [];
                 this.isProceedDisabled = true;
                 this.isLoading = false;
+
+                this.tableData = data.map(record => {
+                    let statusClass = ''; // Default class
+
+                    if (record.stockStage === 'Damaged' || record.stockStage === 'Material Returned') {
+                        statusClass = 'slds-theme_error';
+                    }
+                    else if (record.stockStage === 'Near Expiry' || record.stockStage === 'Expired' ) {
+                        statusClass = 'slds-theme_warning';
+                    }
+                    else if (record.stockStage === 'Available') {
+                        statusClass = 'slds-theme_success';
+                    }
+
+                    return { ...record, statusClass: statusClass };
+                });
             })
             .catch(error => {
                 this.isLoading = false;
@@ -130,6 +183,8 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
         console.log('Selected wpliData:', this.wpliData);
         this.selectedCondition = event.detail.value;
         this.isLoading = true;
+
+
         if (this.selectedCondition === 'All') {
             this.reverseSOTableData = this.wpliData;
         } else if (this.wpliData && this.wpliData.length > 0) {
@@ -139,6 +194,7 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
         }
         this.isLoading = false;
     }
+
     handleReverseClick() {
         this.showReverseTable = true;
         this.isLoading = true;
@@ -178,6 +234,10 @@ export default class WarehouseInventory extends NavigationMixin(LightningElement
         const selectedRows = event.detail.selectedRows;
         this.selectedRows = selectedRows;
         this.isProceedDisabled = selectedRows.length === 0;
+    }
+
+    get hasData() {
+        return this.tableData.length > 0 || this.tableDataForInTransit.length > 0;
     }
 
     handleProceed() {

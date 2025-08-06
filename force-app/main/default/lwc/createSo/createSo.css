@@ -27,3 +27,17 @@
     max-height: 400px; /* or whatever height you want */
     overflow-y: auto;
 }
+.scan-icon-right lightning-icon {
+  pointer-events: none;
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.5rem;
+}
+.custom-dropdown {
+    position: absolute;
+    top: 100%;
+    z-index: 10;
+    width: 100%;
+}

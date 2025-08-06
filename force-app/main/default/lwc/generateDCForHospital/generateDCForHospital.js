@@ -9,7 +9,7 @@ import createDCForHospital from '@salesforce/apex/GenerateDeliveryChallan.create
 import getWarehouseLineItems from '@salesforce/apex/GenerateDeliveryChallan.getWarehouseLineItems';
 import getProducts from '@salesforce/apex/GenerateDeliveryChallan.getProducts';
 import { NavigationMixin } from 'lightning/navigation';
-
+const SERIAL_NUMBER_LENGTH = 11;
 
 export default class GenerateDCForHospital extends NavigationMixin(LightningElement) {
     @track consigneeHospital;
@@ -19,7 +19,7 @@ export default class GenerateDCForHospital extends NavigationMixin(LightningElem
     @track deliveryChallanNumber = 'DC-HOSP-0001';
     @track consignorDistributor = '';
     @track consignorDistributorId;
-
+    @track tableData = [];
     @track isModalOpen = false;
     @track currentProduct = { product: '', warehouse: '' };
     @track modalTitle = '';
@@ -34,7 +34,9 @@ export default class GenerateDCForHospital extends NavigationMixin(LightningElem
     @track showHospDCPage = true;
     @track message = '';
     @track consigneeHospitalName = '';
-
+    @track saveBtnLabel = 'Create Delivery Challan';
+    disableSaveBtn = false;
+    isLoading = false;
     lineItemsColumn = [
         { label: 'Batch Number', fieldName: 'Batch_Number__c' },
         { label: 'Serial Number', fieldName: 'Serial_Number__c' },
@@ -129,11 +131,14 @@ export default class GenerateDCForHospital extends NavigationMixin(LightningElem
     }
 
     loadWarehouseLineItems(productId, warehouseId) {
+        this.isLoading = true;
         getWarehouseLineItems({ productId, warehouseId })
             .then(data => {
+                this.tableData = data;
                 this.warehouseLineItems = data;
             })
-            .catch(error => console.error(error));
+            .catch(error => console.error(error))
+            .finally(() => this.isLoading = false);
     }
 
     saveProduct() {
@@ -177,9 +182,9 @@ export default class GenerateDCForHospital extends NavigationMixin(LightningElem
     }
 
     handleRowSelection(event) {
-        this.selectedRowsData = event.detail.selectedRows;
-        this.selectedRowKeys = this.selectedRowsData.map(r => r.id);
-        console.log('selectedRowsData: ', this.selectedRowsData);
+        const selectedRows = event.detail.selectedRows;
+        this.selectedRowsData = selectedRows;
+        this.selectedRowKeys = selectedRows.map(row => row.Id);
     }
 
     closeModal() {
@@ -215,6 +220,9 @@ export default class GenerateDCForHospital extends NavigationMixin(LightningElem
             products: this.products
         };
 
+        this.saveBtnLabel = 'Creating Delivery Challan...';
+        this.disableSaveBtn = true;
+
         createDCForHospital({ payload: JSON.stringify(payload) })
             .then(recordId => {
                 this.showToast('Success', 'Delivery Challan created successfully', 'success');
@@ -235,9 +243,10 @@ export default class GenerateDCForHospital extends NavigationMixin(LightningElem
             .catch(error => {
                 console.error('Error creating Delivery Challan:', error);
                 this.showToast('Error', error?.body?.message || error?.message || 'Failed to create Delivery Challan', 'error');
+            }).finally(() => {
+                this.saveBtnLabel = 'Create Delivery Challan';
+                this.disableSaveBtn = false;
             });
-
-
     }
 
     handleCreateDCClick() {
@@ -253,5 +262,51 @@ export default class GenerateDCForHospital extends NavigationMixin(LightningElem
 
     showToast(title, message, variant) {
         this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+    }
+
+    get bulkScanPlaceholder() {
+        return `Enter/Scan ${SERIAL_NUMBER_LENGTH} Character Serial Number`;
+    }
+
+    handleBulkSerialChange(event) {
+        const serial = event.target.value;
+
+        if (serial != null && serial.length == SERIAL_NUMBER_LENGTH) {
+            const matchedProduct = this.warehouseLineItems.find(p => p.Serial_Number__c == serial);
+            if (!matchedProduct) {
+                this.showToast('Error', `Serial Number: ${serial} does not exist or invalid.`, 'error');
+                event.target.value = '';
+                return;
+            }
+            const isAlreadySelected = this.selectedRowsData.some(row => row.Serial_Number__c === serial);
+            if (isAlreadySelected) {
+                this.showToast('Error', `Serial Number: ${serial} is already selected.`, 'error');
+                event.target.value = '';
+                return;
+            }
+
+            this.selectedRowsData = [...this.selectedRowsData, matchedProduct];
+            this.selectedRowKeys = this.selectedRowsData.map(row => row.Id);
+            event.target.value = '';
+
+            this.tableData = this.sortDataBySelection();
+            this.showToast('Success', `Serial Number:${serial} has been added.`, 'success');
+        }
+    }
+    sortDataBySelection() {
+        let sortedData = [...this.warehouseLineItems];
+        sortedData.sort((a, b) => {
+            const aIsSelected = this.selectedRowKeys.includes(a.Id);
+            const bIsSelected = this.selectedRowKeys.includes(b.Id);
+
+            if (aIsSelected && !bIsSelected) {
+                return -1;
+            }
+            if (!aIsSelected && bIsSelected) {
+                return 1;
+            }
+            return 0;
+        });
+        return sortedData;
     }
 }

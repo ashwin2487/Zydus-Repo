@@ -3,6 +3,7 @@ import { loadScript } from 'lightning/platformResourceLoader';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import jsPDFResource from '@salesforce/resourceUrl/jspdf';
 import getSupplyOrderDetails from '@salesforce/apex/SupplyOrderController.getSupplyOrderDetails';
+import getRecordType from '@salesforce/apex/SupplyOrderController.getRecordType'
 
 export default class DownloadPage extends LightningElement {
 
@@ -11,7 +12,7 @@ export default class DownloadPage extends LightningElement {
     supplyOrder;
     error;
     jsPDFLoaded = false;
-
+    hospitalRecordType;
     comments;
 
     // Consignor Details
@@ -39,6 +40,12 @@ export default class DownloadPage extends LightningElement {
     consigneePanNumber;
     consigneeGstNumber;
     consigneeDLNumber;
+
+    // consignee ship details
+    consigneeShipAddress;
+    consigneeShipCity;
+    consigneeShipState;
+    consigneeShipPinCode;
 
     // Order Info
     supplyOrderNumber;
@@ -76,6 +83,18 @@ export default class DownloadPage extends LightningElement {
         } catch (error) {
             console.error('Error loading jsPDF:', error);
             this.showToast('Error', 'Failed to load PDF library', 'error');
+        }
+    }
+
+    @wire(getRecordType, { recordId: '$recordId' })
+    wiredRecordType({ error, data }) {
+        if (data) {
+            this.hospitalRecordType = data;
+            console.log('Hospital Record Type:', this.hospitalRecordType);
+            console.log('Hospital Record Type (JSON):', JSON.stringify(this.hospitalRecordType));
+        } else if (error) {
+            this.error = error;
+            console.error('Error fetching record type:', this.error);
         }
     }
 
@@ -192,29 +211,56 @@ export default class DownloadPage extends LightningElement {
             this.consignorGstNumber = consigner.GST_Number__c || 'Not Available';
             this.consignorDLNumber = consigner.Drug_Licence_Number__c || 'Not Available';
 
-            // Consignee - use default object if not available
-            const consignee = this.supplyOrder.Consignee_Distributor__r || this.createDefaultConsigneeObject();
-            this.consigneeName = consignee.Name || 'Not Available';
-            this.consigneeAddress = consignee.Address__c || 'Not Available';
-            this.consigneeCity = consignee.City__c || 'Not Available';
-            this.consigneeState = consignee.State__c || 'Not Available';
-            this.consigneePinCode = consignee.Account_Pin_Code__c || 'Not Available';
-            this.consigneePanNumber = consignee.PAN_Number__c || 'Not Available';
-            this.consigneeGstNumber = consignee.GST_Number__c || 'Not Available';
-            this.consigneeDLNumber = consignee.Drug_Licence_Number__c || 'Not Available';
+            let consignee001;
+
+            if (this.hospitalRecordType == 'HSO') {
+                const consigneeHospital = this.supplyOrder.Consignee_Hospital__r || {};
+
+                this.consigneeName = consigneeHospital.Name || 'Not Available';
+                this.consigneeAddress = consigneeHospital.Address__c || 'Not Available';
+                this.consigneeCity = consigneeHospital.City__c || 'Not Available';
+                this.consigneeState = consigneeHospital.State__c || 'Not Available';
+                this.consigneePinCode = consigneeHospital.Hospital_Pin_Code__c || 'Not Available';
+                this.consigneePanNumber = consigneeHospital.PAN_Number__c || 'Not Available';
+                this.consigneeGstNumber = consigneeHospital.GST_Number__c || 'Not Available';
+                this.consigneeDLNumber = consigneeHospital.DL_no__c || 'Not Available';
+                this.shipTitle = consigneeHospital.Ship_Title__c || 'Not Available';
+
+                this.consigneeShipAddress = this.consigneeAddress || 'Not Available';
+                this.consigneeShipCity = this.consigneeCity || 'Not Available';
+                this.consigneeShipPinCode = this.consigneePinCode || 'Not Available';
+                this.consigneeShipState = this.consigneeState || 'Not Available';
+
+                consignee001 = consigneeHospital;
+
+            } else {
+                // Consignee - use default object if not available
+                const consignee = this.supplyOrder.Consignee_Distributor__r || this.createDefaultConsigneeObject();
+                this.consigneeName = consignee.Name || 'Not Available';
+                this.consigneeAddress = consignee.Address__c || 'Not Available';
+                this.consigneeCity = consignee.City__c || 'Not Available';
+                this.consigneeState = consignee.State__c || 'Not Available';
+                this.consigneePinCode = consignee.Account_Pin_Code__c || 'Not Available';
+                this.consigneePanNumber = consignee.PAN_Number__c || 'Not Available';
+                this.consigneeGstNumber = consignee.GST_Number__c || 'Not Available';
+                this.consigneeDLNumber = consignee.Drug_Licence_Number__c || 'Not Available';
+                consignee001 = consignee;
+            }
+
+
 
             // Order Info
             this.supplyOrderNumber = this.supplyOrder.Name || 'Not Available';
             this.supplyOrderDate = this.formatDate(this.supplyOrder.SO_Generated_Date__c) || 'Not Available';
-            
+
             // Purchase Order - use default object if not available
             const purchaseOrder = this.supplyOrder.New_Purchase_Order__r || this.createDefaultPurchaseOrderObject();
             this.purchaseOrderNumber = purchaseOrder.Name || 'Not Available';
             this.purchaseOrderDate = this.formatDate(purchaseOrder.CreatedDate) || 'Not Available';
 
             // Place of Supply
-            this.placeOfSupply = consignee.City__c || 'Not Available';
-            this.stateOfSupply = consignee.State__c || 'Not Available';
+            this.placeOfSupply = consignee001.City__c || 'Not Available';
+            this.stateOfSupply = consignee001.State__c || 'Not Available';
 
             // Process line items
             this.supplyOrderLineItems = [];
@@ -222,11 +268,11 @@ export default class DownloadPage extends LightningElement {
 
             // Handle empty or null SO_Products__r
             const soProducts = this.supplyOrder.SO_Products__r || [];
-            
+
             if (soProducts.length === 0) {
                 // Create a default line item when no products exist
                 const defaultWarehouse = this.createDefaultWarehouseObject();
-                
+
                 // Set dispatch info using default warehouse
                 this.consignorShipAddress = defaultWarehouse.Address__c;
                 this.consignorShipCity = defaultWarehouse.City__c;
@@ -267,10 +313,10 @@ export default class DownloadPage extends LightningElement {
                     const description = zydusProduct.Material_Description__c || 'Not Available';
 
                     const lineItems = product.Supply_Order_Line_Items__r || [this.createDefaultLineItemObject()];
-                    
+
                     lineItems.forEach(item => {
                         const warehouse = item.Warehouse__r || this.createDefaultWarehouseObject();
-                        
+
                         if (counter === 1) {
                             // Set dispatch info using first line's warehouse
                             this.consignorShipAddress = warehouse.Address__c || 'Not Available';
@@ -345,7 +391,7 @@ export default class DownloadPage extends LightningElement {
             // Create default supply order object when there's an error
             this.supplyOrder = this.createDefaultSupplyOrderObject();
             console.error('Error:', error);
-            
+
             // Set all properties to default values
             this.setDefaultValues();
         } else {
@@ -358,7 +404,7 @@ export default class DownloadPage extends LightningElement {
     // Helper method to set all default values
     setDefaultValues() {
         this.comments = 'Not Available';
-        
+
         // Consignor defaults
         this.consignorName = 'Not Available';
         this.consignorAddress = 'Not Available';
@@ -368,13 +414,13 @@ export default class DownloadPage extends LightningElement {
         this.consignorPanNumber = 'Not Available';
         this.consignorGstNumber = 'Not Available';
         this.consignorDLNumber = 'Not Available';
-        
+
         // Consignor Ship From defaults
         this.consignorShipAddress = 'Not Available';
         this.consignorShipCity = 'Not Available';
         this.consignorShipState = 'Not Available';
         this.consignorShipPinCode = 'Not Available';
-        
+
         // Consignee defaults
         this.consigneeName = 'Not Available';
         this.consigneeAddress = 'Not Available';
@@ -384,19 +430,19 @@ export default class DownloadPage extends LightningElement {
         this.consigneePanNumber = 'Not Available';
         this.consigneeGstNumber = 'Not Available';
         this.consigneeDLNumber = 'Not Available';
-        
+
         // Order Info defaults
         this.supplyOrderNumber = 'Not Available';
         this.supplyOrderDate = 'Not Available';
         this.purchaseOrderNumber = 'Not Available';
         this.purchaseOrderDate = 'Not Available';
-        
+
         // Dispatch and Supply Info defaults
         this.dispatchFromPlace = 'Not Available';
         this.dispatchFromState = 'Not Available';
         this.placeOfSupply = 'Not Available';
         this.stateOfSupply = 'Not Available';
-        
+
         // Create default line item
         this.supplyOrderLineItems = [{
             id: 1,
@@ -420,21 +466,21 @@ export default class DownloadPage extends LightningElement {
             IGSTRate: '0.00',
             totalValue: '0.00'
         }];
-        
+
         // Reset totals
         this.totalCGSTAmount = 0;
         this.totalSGSTAmount = 0;
         this.totalIGSTAmount = 0;
         this.totalTaxableValue = 0;
         this.totalFinalValue = 0;
-        
+
         // Format totals
         this.totalTaxableValue = this.totalTaxableValue.toFixed(2);
         this.totalCGSTAmount = this.totalCGSTAmount.toFixed(2);
         this.totalSGSTAmount = this.totalSGSTAmount.toFixed(2);
         this.totalIGSTAmount = this.totalIGSTAmount.toFixed(2);
         this.totalFinalValue = this.totalFinalValue.toFixed(2);
-        
+
         this.amountInWords = this.convertNumberToWords(0);
     }
 
@@ -448,6 +494,7 @@ export default class DownloadPage extends LightningElement {
             this.generatePDF();
         } catch (error) {
             console.error('Error generating PDF:', error);
+            console.log(error.message);
             this.showToast('Error', 'Failed to generate PDF. Please try again.', 'error');
         }
     }
@@ -659,7 +706,7 @@ export default class DownloadPage extends LightningElement {
             // Calculate column widths - Fixed widths for better control
             const printableWidth = pageWidth - margin * 2;
             // const colWidths = [
-                
+
             //     8,   // Sr. No.
             //     20,  // Sub DC No.
             //     25,  // Product Name
@@ -1026,11 +1073,28 @@ export default class DownloadPage extends LightningElement {
         const signatureWidth = footerRightWidth;
         const signatureHeight = footerHeight / 2;
 
+        // doc.setFont('helvetica', 'bold');
+        // doc.setFontSize(9);
+        // doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 8, { align: 'center' });
+        // doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
+        // doc.text('Authorised Signatory.', signatureX + signatureWidth / 2, yPosition + signatureHeight + 8, { align: 'center' });
+
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
-        doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 8, { align: 'center' });
+
+        // Left signature - Receiver Signature
+        doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 18, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+        doc.text(`(${this.consigneeName})`, signatureX + signatureWidth / 2, yPosition + 23, { align: 'center' });
+
+        // Draw the signature line
         doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
-        doc.text('Authorised Signatory.', signatureX + signatureWidth / 2, yPosition + signatureHeight + 8, { align: 'center' });
+
+        // Right signature - Authorised Signatory
+        doc.setFont('helvetica', 'bold'); // Back to bold for the label
+        doc.text('Authorised Signatory.', signatureX + signatureWidth / 2, yPosition + signatureHeight + 18, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+        doc.text(`(${this.consignorName})`, signatureX + signatureWidth / 2, yPosition + signatureHeight + 23, { align: 'center' });
 
         const fileName = `Supply_Order_${this.supplyOrderNumber || 'Document'}.pdf`;
         doc.save(fileName);

@@ -624,6 +624,41 @@ export default class POdownloadPage extends LightningElement {
         });
 
         // Signature Section - Right Column
+        // const signatureStartY = yPosition;
+        // const signatureBoxHeight = 60;
+        // const signatureBoxWidth = rightColumnWidth;
+
+        // doc.setFillColor(245, 245, 245);
+        // doc.rect(rightColumnStart, signatureStartY - 5, signatureBoxWidth, signatureBoxHeight, 'F');
+
+        // doc.setDrawColor(200, 200, 200);
+        // doc.setLineWidth(0.5);
+        // doc.rect(rightColumnStart, signatureStartY - 5, signatureBoxWidth, signatureBoxHeight);
+
+        // doc.setDrawColor(0, 0, 0);
+        // doc.setTextColor(0, 0, 0);
+        // doc.setFont('helvetica', 'normal');
+        // doc.setFontSize(9);
+
+        // const signatureBoxCenter = rightColumnStart + (signatureBoxWidth / 2);
+
+        // // Receiver Signature
+        // const receiverY = signatureStartY + 15;
+        // const receiverText = 'Receiver Signature';
+        // const receiverTextWidth = doc.getTextWidth(receiverText);
+        // doc.text(receiverText, signatureBoxCenter - (receiverTextWidth / 2), receiverY);
+
+        // const lineWidth = 80;
+        // doc.setLineWidth(0.2);
+        // doc.line(signatureBoxCenter - (lineWidth / 2), receiverY + 12, signatureBoxCenter + (lineWidth / 2), receiverY + 12);
+
+        // // Authorised Signatory
+        // const authorisedY = receiverY + 25;
+        // const authorisedText = 'Authorised Signatory';
+        // const authorisedTextWidth = doc.getTextWidth(authorisedText);
+        // doc.text(authorisedText, signatureBoxCenter - (authorisedTextWidth / 2), authorisedY);
+
+
         const signatureStartY = yPosition;
         const signatureBoxHeight = 60;
         const signatureBoxWidth = rightColumnWidth;
@@ -648,6 +683,11 @@ export default class POdownloadPage extends LightningElement {
         const receiverTextWidth = doc.getTextWidth(receiverText);
         doc.text(receiverText, signatureBoxCenter - (receiverTextWidth / 2), receiverY);
 
+        // Add consignee name under Receiver Signature
+        const consigneeText = `(${this.consigneeName})`;
+        const consigneeTextWidth = doc.getTextWidth(consigneeText);
+        doc.text(consigneeText, signatureBoxCenter - (consigneeTextWidth / 2), receiverY + 8);
+
         const lineWidth = 80;
         doc.setLineWidth(0.2);
         doc.line(signatureBoxCenter - (lineWidth / 2), receiverY + 12, signatureBoxCenter + (lineWidth / 2), receiverY + 12);
@@ -657,6 +697,11 @@ export default class POdownloadPage extends LightningElement {
         const authorisedText = 'Authorised Signatory';
         const authorisedTextWidth = doc.getTextWidth(authorisedText);
         doc.text(authorisedText, signatureBoxCenter - (authorisedTextWidth / 2), authorisedY);
+
+        // Add consignor name under Authorised Signatory
+        const consignorText = `(${this.consignorName})`;
+        const consignorTextWidth = doc.getTextWidth(consignorText);
+        doc.text(consignorText, signatureBoxCenter - (consignorTextWidth / 2), authorisedY + 8);
     }
 
 

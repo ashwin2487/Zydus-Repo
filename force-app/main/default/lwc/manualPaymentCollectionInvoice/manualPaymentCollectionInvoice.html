@@ -3,65 +3,50 @@
         <lightning-layout multiple-rows class="slds-p-around_medium">
             <!-- Net Amount Display -->
             <lightning-layout-item size="12">
-                <lightning-input
-                    type="number"
-                    label="Net Amount"
-                    value={totalAmount}
-                    disabled>
+                <lightning-input type="number" label="Net Amount" value={totalAmount} disabled>
                 </lightning-input>
             </lightning-layout-item>
 
             <!-- Remaining Amount -->
             <lightning-layout-item size="12">
-                <lightning-input
-                    type="number"
-                    label="Remaining Amount"
-                    value={totalRemainingAmount}
-                    disabled>
+                <lightning-input type="number" label="Remaining Amount" value={calTotalRemainingAmount} disabled>
                 </lightning-input>
             </lightning-layout-item>
 
             <!-- Amount to Pay -->
             <lightning-layout-item size="12">
-                <lightning-input
-                    type="number"
-                    label="Amount Paid"
-                    value={amountToPay}
-                    required
+                <lightning-input type="number" label="Amount Paid" value={amountToPay} required
                     onchange={handleAmountChange}>
                 </lightning-input>
             </lightning-layout-item>
 
             <!-- Payment Mode -->
             <lightning-layout-item size="12">
-                <lightning-combobox
-                    name="paymentMode"
-                    label="Payment Mode"
-                    value={paymentMode}
-                    placeholder="Select Payment Mode"
-                    options={paymentModeOptions}
-                    onchange={handlePaymentModeChange}
-                    required
-                    >
+                <lightning-combobox name="paymentMode" label="Payment Mode" value={paymentMode}
+                    placeholder="Select Payment Mode" options={paymentModeOptions} onchange={handlePaymentModeChange}
+                    required>
                 </lightning-combobox>
             </lightning-layout-item>
+            <template if:true={isCreditNotePaymentMode}>
+                <lightning-layout-item size="12" class="slds-m-top_medium">
+                    <div class="slds-box">
+                        <strong>Available Credit Notes</strong>
+                        <lightning-datatable key-field="Id" data={creditNoteData} columns={cnColumns}
+                            onrowselection={handleRowSelection} selected-rows={selectedRowIds}>
+                        </lightning-datatable>
+                    </div>
+                </lightning-layout-item>
 
+            </template>
             <lightning-layout-item size="12">
-                <lightning-textarea
-                    type="text"
-                    label="Comment"
-                    value={comment}
-                    onchange={handleCommentChange}>
+                <lightning-textarea type="text" label="Comment" value={comment} onchange={handleCommentChange}>
                 </lightning-textarea>
             </lightning-layout-item>
-            
+
         </lightning-layout>
 
         <div class="slds-p-around_medium slds-align_absolute-center">
-            <lightning-button
-                label="Submit Payment"
-                variant="brand"
-                onclick={handleSubmit}>
+            <lightning-button label="Submit Payment" variant="brand" onclick={handleSubmit} disabled={isPaymentSave}>
             </lightning-button>
         </div>
     </lightning-card>

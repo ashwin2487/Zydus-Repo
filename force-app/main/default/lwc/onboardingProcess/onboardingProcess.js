@@ -8,6 +8,7 @@ import getDistributorOptions from '@salesforce/apex/onboardingController.getDist
 import getHospitalOptions from '@salesforce/apex/onboardingController.getHospitalOptions';
 import getSubDistributorOptions from '@salesforce/apex/onboardingController.getSubDistributorOptions';
 import getPriceBookOptions from '@salesforce/apex/onboardingController.getPriceBookOptions';
+import getPriceBookOptionsHosp from '@salesforce/apex/onboardingController.getPriceBookOptionsHosp';
 import getDistributorTypePicklistValues from '@salesforce/apex/onboardingController.getDistributorTypePicklistValues';
 import fetchUserDistributorHierarchy from '@salesforce/apex/onboardingController.fetchUserDistributorHierarchy';
 import getDistributorsBySuper from '@salesforce/apex/onboardingController.getDistributorsBySuper';
@@ -21,8 +22,7 @@ import createHospitalRecord from '@salesforce/apex/HospitalOnboardingController.
 import getLatestDistributorId from '@salesforce/apex/onboardingController.getLatestDistributorId';
 import getLatestHospitalId from '@salesforce/apex/onboardingController.getLatestHospitalId';
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const MAX_TOTAL_RAW_BYTES = MAX_FILE_SIZE * 6;
-import getProductOptions from '@salesforce/apex/onboardingController.getProductOptions';
+const MAX_TOTAL_RAW_BYTES = MAX_FILE_SIZE * 8;
 
 export default class OnboardingProcess extends LightningElement {
 
@@ -101,9 +101,7 @@ export default class OnboardingProcess extends LightningElement {
     @track ifsc = '';
     @track bankName = '';
     @track selectedHospitals = [];
-    @track selectedProducts = [];
     @track hospitalOptions = [];
-    @track productOptions = [];
     @track pricebookOptions = [];
     @track distributorOptions = [];
     @track superDistributorOptions = [];
@@ -146,6 +144,7 @@ export default class OnboardingProcess extends LightningElement {
     @track commentOptionSelected = [];
     mappingDistributorTypeOptions = [];
     mappingChannelPartnerOptions = [];
+    @track pricebookOptionsHosp = [];
     @track paymentTermOptions = [
         { label: 'Advance Payment', value: 'Advance' },
         { label: 'Next 15 Days', value: 'Net15' },
@@ -161,7 +160,7 @@ export default class OnboardingProcess extends LightningElement {
     @track documentUploads = [
         {
             key: 'pan',
-            label: 'Pan Certificate*',
+            label: 'Pan Certificate',
             checkboxLabel: 'I confirm Pan document is uploaded (5 MB Max.)',
             file: null,
             fileName: '',
@@ -169,7 +168,7 @@ export default class OnboardingProcess extends LightningElement {
         },
         {
             key: 'gst',
-            label: 'GST Certificate*',
+            label: 'GST Certificate',
             checkboxLabel: 'I confirm GST document is uploaded (5 MB Max.)',
             file: null,
             fileName: '',
@@ -177,7 +176,7 @@ export default class OnboardingProcess extends LightningElement {
         },
         {
             key: 'bank',
-            label: 'Bank Gaurantee*',
+            label: 'Bank Gaurantee',
             checkboxLabel: 'I confirm Bank Gaurantee document is uploaded (5 MB Max.)',
             file: null,
             fileName: '',
@@ -185,7 +184,7 @@ export default class OnboardingProcess extends LightningElement {
         },
         {
             key: 'license',
-            label: 'Drug License Certificate*',
+            label: 'Drug License Certificate',
             checkboxLabel: 'I confirm Drug License document is uploaded (5 MB Max.)',
             file: null,
             fileName: '',
@@ -193,7 +192,7 @@ export default class OnboardingProcess extends LightningElement {
         },
         {
             key: 'cheque',
-            label: 'Cancelled Cheque*',
+            label: 'Cancelled Cheque',
             checkboxLabel: 'I confirm Cancelled Cheque is uploaded (5 MB Max.)',
             file: null,
             fileName: '',
@@ -201,8 +200,24 @@ export default class OnboardingProcess extends LightningElement {
         },
         {
             key: 'agreement',
-            label: 'Agreement Copy*',
+            label: 'Agreement Copy',
             checkboxLabel: 'I confirm Agreement Copy is uploaded (5 MB Max.)',
+            file: null,
+            fileName: '',
+            confirmed: false
+        },
+        {
+            key: 'logo',
+            label: 'Logo Image',
+            checkboxLabel: 'I confirm Logo Image is uploaded (5 MB Max.)',
+            file: null,
+            fileName: '',
+            confirmed: false
+        },
+        {
+            key: 'signature',
+            label: 'Signature',
+            checkboxLabel: 'I confirm Signature Image is uploaded (5 MB Max.)',
             file: null,
             fileName: '',
             confirmed: false
@@ -215,7 +230,12 @@ export default class OnboardingProcess extends LightningElement {
         { label: 'Distributor Onboarding', value: 'distributor' },
         { label: 'Hospital Onboarding', value: 'hospital' }
     ];
-
+    @track paymentModeOptions = [
+        { label: 'Cash', value: 'Cash' },
+        { label: 'Bank Transfer', value: 'Bank Transfer' },
+        { label: 'Cheque', value: 'Cheque' }
+    ];
+    @track selectedPaymentMode;
 
     acceptedFormats = ['.pdf', '.png', '.jpg', '.jpeg', '.docx'];
 
@@ -235,7 +255,43 @@ export default class OnboardingProcess extends LightningElement {
         if (!file) { return; }
 
         if (file.size > MAX_FILE_SIZE) {
-            alert(`"${file.name}" is too large. Maximum per-file size is 5 MB.`);
+            this.showToast(
+                'File Size Limit Exceeded',
+                `"${file.name}" is too large. Maximum per-file size is 5 MB.`,
+                'warn'
+            );
+            return;
+        }
+
+        const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.'));
+
+        const allowedExtensions = ['jpg', 'jpeg', 'png'];
+        const fileExtension = file.name.substring(file.name.lastIndexOf('.') + 1).toLowerCase();
+
+        if (key === 'logo' && !fileNameWithoutExt.endsWith('_LOGO')) {
+            this.showToast(
+                'Invalid File Name',
+                'The file name must end with "_LOGO" (e.g., "Gowell_Distributor_Center_LOGO.png").',
+                'warn'
+            );
+            return;
+        }
+
+        if (key === 'signature' && !fileNameWithoutExt.endsWith('_SIGN')) {
+            this.showToast(
+                'Invalid File Name',
+                'The file name must end with "_SIGN" (e.g., "Gowell_Distributor_Center_SIGN.png").',
+                'warn'
+            );
+            return;
+        }
+
+        if ((key === 'logo' || key === 'signature') && !allowedExtensions.includes(fileExtension)) {
+            this.showToast(
+                'Invalid File Type',
+                'Only PNG, JPG and JPEG file formats are allowed.',
+                'error'
+            );
             return;
         }
 
@@ -244,7 +300,11 @@ export default class OnboardingProcess extends LightningElement {
             0
         );
         if (currentTotal + file.size > MAX_TOTAL_RAW_BYTES) {
-            alert('Adding this file would exceed the total 30 MB limit across all documents.');
+            this.showToast(
+                'Total File Size Limit Exceeded',
+                'Adding this file would exceed the total 40 MB limit across all documents.',
+                'warn'
+            );
             return;
         }
 
@@ -252,7 +312,7 @@ export default class OnboardingProcess extends LightningElement {
             file.name.toLowerCase().endsWith(ext)
         );
         if (!isAccepted) {
-            alert('Unsupported file type. Allowed: PDF, PNG, JPG, JPEG, DOCX.');
+            this.showToast('Unsupported File Type', 'Unsupported file type. Allowed: PDF, PNG, JPG, JPEG, DOCX.', 'warn');
             return;
         }
 
@@ -274,7 +334,7 @@ export default class OnboardingProcess extends LightningElement {
         };
         reader.onerror = () => {
             console.error('File reading error', reader.error);
-            alert('There was an error reading the file.');
+            this.showToast('File Reading Error', 'There was an error reading the file.', 'error');
         };
         reader.readAsDataURL(file);
     }
@@ -300,7 +360,7 @@ export default class OnboardingProcess extends LightningElement {
     validateAndCloseModal() {
         const allConfirmed = this.documentUploads.every(d => d.confirmed && d.fileData);
         if (!allConfirmed) {
-            alert('Please upload all documents before proceeding.');
+            this.showToast('Upload all documents', 'Please upload all documents before proceeding.', 'warn');
             return;
         }
         this.closeUploadModal();
@@ -414,7 +474,9 @@ export default class OnboardingProcess extends LightningElement {
         }
     }
 
-
+    handlePaymentModeChange(event) {
+        this.selectedPaymentMode = event.detail.value;
+    }
 
     handleSUPDSelection(event) {
         this.selectedSuperDistributor = event.detail.value;
@@ -514,13 +576,26 @@ export default class OnboardingProcess extends LightningElement {
     wiredPriceBookOtions({ error, data }) {
         if (data) {
             this.pricebookOptions = data.map(item => ({
-                label: item.Price_Book_Name__c,
+                label: item.Name,
                 value: item.Id
             }));
         } else if (error) {
             console.error(error);
         }
     }
+
+    @wire(getPriceBookOptionsHosp)
+    wiredPriceBookOtionsHosp({ error, data }) {
+        if (data) {
+            this.pricebookOptionsHosp = data.map(item => ({
+                label: item.Name,
+                value: item.Id
+            }));
+        } else if (error) {
+            console.error(error);
+        }
+    }
+
     handlePriceBookChange(event) {
         this.selectedPriceBook = event.detail.value;
         console.log('selected price book is ' + this.selectedPriceBook);
@@ -578,17 +653,7 @@ export default class OnboardingProcess extends LightningElement {
             console.error(error);
         }
     }
-    @wire(getProductOptions)
-    wiredProductOptions({ error, data }) {
-        if (data) {
-            this.productOptions = data.map(item => ({
-                label: item.Name,
-                value: item.Id
-            }));
-        } else if (error) {
-            console.error(error);
-        }
-    }
+
     @wire(getZydusSalesRepPositions)
     wiredZydusContacts({ error, data }) {
         if (data) {
@@ -606,9 +671,7 @@ export default class OnboardingProcess extends LightningElement {
     handleHospitalChange(event) {
         this.selectedHospitals = event.detail.value;
     }
-    handleProductChange(event) {
-        this.selectedProducts = event.detail.value;
-    }
+
     handleMobileChange(event) {
         this.mobile = event.target.value;
         const msg = this.validateFields('mobile', 'submit');
@@ -750,7 +813,7 @@ export default class OnboardingProcess extends LightningElement {
             case 'ifsc':
                 if (this.ifsc?.length > 11)
                     return 'IFSC Code cannot exceed 11 characters.';
-                if (mode === 'submit' && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(this.ifsc))
+                if (mode === 'submit' && !/^[A-Z]{4}0.{6}$/.test(this.ifsc))
                     return 'IFSC Code must be 11 characters and valid format (e.g., ABCD0123456).';
                 break;
             case 'creditDates':
@@ -805,6 +868,7 @@ export default class OnboardingProcess extends LightningElement {
             zydusMapping: this.zydusMapping,
             drugLicenceNumber: this.drugLicenceNumber,
             validTillDate: this.validTillDate,
+            selectedPaymentMode: this.selectedPaymentMode,
             uploadedFiles: this.documentUploads
         };
 
@@ -1253,40 +1317,39 @@ export default class OnboardingProcess extends LightningElement {
             return;
         }
 
-const hospitalRecordPayload = {
-    hospitalName: this.hospitalName,
-    hospRegistrationNumber: this.hospRegistrationNumber,
-    hospGroup: this.hospGroup,
-    firstName: this.firstName,
-    lastName: this.lastName,
-    email: this.email,
-    mobile: this.mobile,
-    ccEmail: this.ccEmail,
-    billingAddress: this.billingAddress,
-    city: this.city,
-    selectedPriceBook: this.selectedPriceBook,
-    selectedState: this.selectedState,
-    pin: this.pin,
-    shippingAddress: this.shippingAddress,
-    shipCity: this.shipCity,
-    selectedShipState: this.selectedShipState,
-    shipPin: this.shipPin,
-    shipTitle: this.shipTitle,
-    selectedSuperDistributor: this.selectedSuperDistributorHOB?.value || null,
-    selectedDistributor: this.selectedDistributorHOB?.value || null,
-    selectedSubDistributor: this.selectedSubDistributorHOB?.value || null,
-    panNumber: this.panNumber,
-    gstNumber: this.gstNumber,
-    dlNo: this.dlNo,
-    dlExpiryDate: this.dlExpiryDate,
-    doctorName: this.doctorName,
-    paymentTerm: this.paymentTerm,
-    invoiceComment: this.invoiceComment,
-    hospitalId: this.hospitalId,
-    phyziiId: this.phyziiId,
-    selectedProducts: this.selectedProducts,
-    commentOptionSelected: this.selectedCommentOptionsString
-};
+        const hospitalRecordPayload = {
+            hospitalName: this.hospitalName,
+            hospRegistrationNumber: this.hospRegistrationNumber,
+            hospGroup: this.hospGroup,
+            firstName: this.firstName,
+            lastName: this.lastName,
+            email: this.email,
+            mobile: this.mobile,
+            ccEmail: this.ccEmail,
+            billingAddress: this.billingAddress,
+            city: this.city,
+            selectedPriceBook: this.selectedPriceBook,
+            selectedState: this.selectedState,
+            pin: this.pin,
+            shippingAddress: this.shippingAddress,
+            shipCity: this.shipCity,
+            selectedShipState: this.selectedShipState,
+            shipPin: this.shipPin,
+            shipTitle: this.shipTitle,
+            selectedSuperDistributor: this.selectedSuperDistributorHOB?.value || null,
+            selectedDistributor: this.selectedDistributorHOB?.value || null,
+            selectedSubDistributor: this.selectedSubDistributorHOB?.value || null,
+            panNumber: this.panNumber,
+            gstNumber: this.gstNumber,
+            dlNo: this.dlNo,
+            dlExpiryDate: this.dlExpiryDate,
+            doctorName: this.doctorName,
+            paymentTerm: this.paymentTerm,
+            invoiceComment: this.invoiceComment,
+            hospitalId: this.hospitalId,
+            phyziiId: this.phyziiId,
+            commentOptionSelected: this.selectedCommentOptionsString
+        };
 
 
         console.log('Hospital Record Payload:', JSON.stringify(hospitalRecordPayload));

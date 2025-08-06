@@ -1,17 +1,18 @@
 import { LightningElement, wire, api, track } from 'lwc';
-import { getRecord } from 'lightning/uiRecordApi';
 import getConsigneeDistributor from '@salesforce/apex/SupplyOrderController.getConsigneeDistributor';
 import getProductByPB from '@salesforce/apex/SupplyOrderController.getProductByPB';
 import getWarehouseLineItem from '@salesforce/apex/SupplyOrderController.getWarehouseLineItem';
 import getProductForConsignee from '@salesforce/apex/SupplyOrderController.getProductForConsignee';
+import getAccountDetails from '@salesforce/apex/SupplyOrderController.getAccountDetails';
+import getConsigneePB from '@salesforce/apex/SupplyOrderController.getConsigneePB';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import createSupplyOrderWithLineItems from '@salesforce/apex/SupplyOrderController.createSupplyOrderWithLineItems';
 import { CloseActionScreenEvent } from "lightning/actions";
-
+const SERIAL_NUMBER_LENGTH = 15;
 export default class CreateManualSO extends NavigationMixin(LightningElement) {
 
-    @api recordId;
+    @track accountId;
     @track selectedAccountName;
     @track selectedSupplierName;
     @track selectedPriceBookId;
@@ -26,7 +27,9 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
     @track sortDirection;
     consigneeDistributorProductIds = [];
     @track validSelectedProducts = [];
-
+    isLoadingProducts = false;
+    @track manualSOLable = 'Create Manual Sales Order';
+    disableCreateSOBtn = false;
     columns = [
         { label: 'Name', fieldName: 'Name', sortable: true, type: 'text', initialWidth: 100 },
         { label: 'Product Name', fieldName: 'ZydusProduct', type: 'text', sortable: true, initialWidth: 150 },
@@ -42,73 +45,43 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
     ];
 
 
-    @wire(getRecord, { recordId: '$recordId', fields: ['Account.Id', 'Account.Name', 'Account.Zydus_Price_Book__c', 'Account.Zydus_Price_Book__r.Name'] })
+    @wire(getAccountDetails)
     account({ error, data }) {
         if (data) {
-            this.accountDetails = data;
-            console.log('accountDetails:', this.accountDetails);
-            this.setAccountDetails();
+            console.log('RESULT:', data);
+            this.accountId = data.Id;
+            this.selectedSupplierName = data.Name;
         } else if (error) {
             this.toast('Error', error.body.message, 'error');
         }
     }
 
-    setAccountDetails() {
-        const accFields = this.accountDetails.fields;
-        this.selectedSupplierName = accFields.Name.value;
-        this.selectedPriceBookId = accFields.Zydus_Price_Book__c?.value;
-        this.selectedPriceBook = accFields.Zydus_Price_Book__r?.displayValue;
-
-        getProductByPB({ PBId: this.selectedPriceBookId })
-            .then(result => {
-                if (result) {
-                    this.productOptions = result.map(product => ({
-                        label: product.Name,
-                        value: product.Id
-                    }));
-                } else {
-                    this.productOptions = [];
-                }
-            })
-            .catch(error => {
-                this.dispatchEvent(
-                    new ShowToastEvent({
-                        title: 'Error loading products',
-                        message: error.body.message,
-                        variant: 'error'
-                    })
-                );
-            }
-            );
-
-    }
-
-    handleConsigneeDistributorChange(event) {
+    async handleConsigneeDistributorChange(event) {
+        this.consigneeDistributor = event.detail.value;
+        this.isLoadingProducts = true; 
+        this.validSelectedProducts=[];
         try {
-            this.consigneeDistributor = event.detail.value;
-
-            getProductForConsignee({ consigneeId: this.consigneeDistributor })
-                .then(result => {
-                    if (result && Array.isArray(result)) {
-                        this.consigneeDistributorProductIds = result.map(product => product.Id);
-                    } else {
-                        this.consigneeDistributorProductIds = [];
-                    }
-                    this.isProductListLoaded = true;
-                })
-                .catch(error => {
-                    console.error('Apex call failed:', error);
-                    this.isProductListLoaded = true;
-                    this.dispatchEvent(
-                        new ShowToastEvent({
-                            title: 'Error loading products',
-                            message: error.body?.message || error.message || 'Unknown error',
-                            variant: 'error'
-                        })
-                    );
-                });
-        } catch (e) {
-            console.error('Error in handleCongneeDistributorChange:', e);
+            const [
+                consigneeProducts,
+                pricebook
+            ] = await Promise.all([
+                getProductForConsignee({ consigneeId: this.consigneeDistributor }),
+                getConsigneePB({ consigneeId: this.consigneeDistributor })
+            ]);
+            this.consigneeDistributorProductIds = Array.isArray(consigneeProducts) ? consigneeProducts.map(product => product.Id) : [];
+            if (pricebook) {
+                this.selectedPriceBookId = pricebook.Id;
+                this.selectedPriceBook = pricebook.Name;
+                const products = await getProductByPB({ PBId: this.selectedPriceBookId });
+                this.productOptions = products ? products.map(product => ({
+                    label: product.Name,
+                    value: product.Id
+                })) : [];
+            }
+        } catch (error) {
+            this.showToast('Error', error.body?.message || error.message, 'error');
+        } finally {
+            this.isLoadingProducts = false;
         }
     }
 
@@ -117,7 +90,7 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
         return !!this.consigneeDistributor;
     }
 
-    @wire(getConsigneeDistributor, { Id: '$recordId' })
+    @wire(getConsigneeDistributor, { Id: '$accountId' })
     wiredConsigneeDistributor({ error, data }) {
         if (data) {
             this.consigneeDistributorOptions = data.map(acc => ({
@@ -181,7 +154,7 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
 
     @track warehouseLineItems = [];
 
-    @wire(getWarehouseLineItem, { Id: '$recordId' })
+    @wire(getWarehouseLineItem, { Id: '$accountId' })
     wiredLineItems({ error, data }) {
         if (data) {
             this.warehouseLineItems = data.map(item => ({
@@ -230,8 +203,8 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
         };
     }
 
-    get disableCreateSOBtn() {
-        return this.validSelectedProducts.length === 0;
+    get disableCreateSOBtnGetter() {
+        return this.disableCreateSOBtn || this.validSelectedProducts.length === 0;
     }
 
     handleCreateManualSO() {
@@ -250,11 +223,13 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
             taxMaster: item.Warehouse__r.Zydus_Product__r.Tax_Master__c || null,
             zydusProductId: item.Warehouse__r?.Zydus_Product__c || null
         }));
+        this.disableCreateSOBtn = true;
+        this.manualSOLable = 'Creating Manual Sales Order...';
 
         console.log('dtoList: ', dtoList);
         createSupplyOrderWithLineItems({
             consigneeId: this.consigneeDistributor,
-            consignorId: this.recordId,
+            consignorId: this.accountId,
             warehouseItemsJson: JSON.stringify(dtoList)
         })
             .then(soId => {
@@ -287,4 +262,45 @@ export default class CreateManualSO extends NavigationMixin(LightningElement) {
         this.dispatchEvent(evt);
     }
 
+    @track bulkSerialInput = ''
+    get bulkScanPlaceholder() {
+        return `Enter/Scan ${SERIAL_NUMBER_LENGTH} Serial Numbers`;
+    }
+    handleBulkSerialChange(event) {
+        const serial = event.target.value;
+        if (serial && serial.length === SERIAL_NUMBER_LENGTH) {
+            const matchingProduct = this.sortedData.find(item =>
+                item.Serial_Number__c === serial
+            );
+
+            if (matchingProduct) {
+                const productId = matchingProduct?.Warehouse__r?.Zydus_Product__c;
+                if (!this.consigneeDistributorProductIds.includes(productId)) {
+                    const productName = matchingProduct.ZydusProduct || matchingProduct?.Warehouse__r?.Zydus_Product__r?.Name || 'Unknown Product';
+                    this.showToast(
+                        'Unavailable Product',
+                        `Product ${productName} (${serial}) is not available for this consignee.`,
+                        'error'
+                    );
+                    event.target.value = ''; // Clear input for next scan
+                    return;
+                }
+
+                const isAlreadyAdded = this.validSelectedProducts.some(p => p.Id === matchingProduct.Id);
+                if (isAlreadyAdded) {
+                    this.showToast('Duplicate Product', 'This product has already been added.', 'warning');
+                    event.target.value = ''; // Clear input
+                    return;
+                }
+                this.validSelectedProducts = [...this.validSelectedProducts, matchingProduct];
+                this.sortedData = this.sortedData.filter(p => p.Id !== matchingProduct.Id);
+                event.target.value = '';
+                this.showToast('Success', `${serial} added successfully.`, 'success');
+
+            } else {
+                this.showToast('Error', 'Serial number not found in the available list.', 'error');
+                event.target.value = '';
+            }
+        }
+    }
 }

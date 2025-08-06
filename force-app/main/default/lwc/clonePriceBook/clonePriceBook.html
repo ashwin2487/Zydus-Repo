@@ -3,17 +3,26 @@
     <lightning-modal-body>
         <div class="slds-grid slds-wrap">
             <div class="slds-col slds-size_12-of-12">
-            <lightning-input label="New Price Book Name" value={newPriceBookName} onchange={handleNameChange} required></lightning-input>
-            </div>
-            <div class="slds-col slds-size_12-of-12">
-            <lightning-input type="date" label="Start Date" value={startDate} onchange={handleStartDateChange} required></lightning-input>
+                <lightning-input type="date" label="Start Date" value={startDate} onchange={handleStartDateChange}
+                    required></lightning-input>
             </div>
             <div class="slds-col slds-size_12-of-12 ">
-            <lightning-input type="date" label="End Date" value={endDate} onchange={handleEndDateChange} required></lightning-input>
+                <lightning-input type="date" label="End Date" value={endDate} onchange={handleEndDateChange}
+                    required></lightning-input>
             </div>
-            <div class="slds-col slds-size_12-of-12 slds-m-top_medium">
-            <lightning-input type="checkbox" label="Mark as Active" checked={isActive} onchange={handleIsActiveChange} required></lightning-input>
-            </div>
+            <template if:true={recordTypeName}>
+                <div class="slds-col slds-size_12-of-12 ">
+                    <lightning-input type="text" label="Dealer Name" value={dealer} onchange={handleDealerNameChange}
+                        required></lightning-input>
+                </div>
+            </template>
+
+            <template if:false={recordTypeName}>
+                <div class="slds-col slds-size_12-of-12 ">
+                    <lightning-input type="text" label="Hospital Name" value={hospital} onchange={handleHospitalNameChange}
+                        required></lightning-input>
+                </div>
+            </template>
         </div>
     </lightning-modal-body>
     <lightning-modal-footer>

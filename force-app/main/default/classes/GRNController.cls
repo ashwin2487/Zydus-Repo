@@ -7,7 +7,7 @@ public without sharing class GRNController {
     public static Map<String, Object> getDeliveryChallanDetails(Id challanId) {
         System.debug('recordId is ' + challanId);
         Delivery_Challan__c challan = [
-            SELECT Id, Consignee_Distributor__c,Consignee_Hospital__c,Consignor_Distributor__c,RecordType.Name
+            SELECT Id, Name, Consignee_Distributor__c,Consignee_Hospital__c,Consignor_Distributor__c,RecordType.Name,isGRNCreated__c,GRN_Number__c
             FROM Delivery_Challan__c
             WHERE Id = :challanId
             LIMIT 1
@@ -21,6 +21,12 @@ public without sharing class GRNController {
                 WHERE Hospital__c = :challan.Consignee_Hospital__c
             ];
         } else if (challan.RecordType.Name == 'DC') {
+            warehouses = [
+                SELECT Id, Name
+                FROM Warehouse__c
+                WHERE Account__c = :challan.Consignee_Distributor__c
+            ];
+        }else if(challan.RecordType.Name == 'RDC'){
             warehouses = [
                 SELECT Id, Name
                 FROM Warehouse__c
@@ -58,10 +64,11 @@ public without sharing class GRNController {
         }
         
         return new Map<String, Object>{
-            'lineItems' => lineItemDTOs,
-                'warehouseOptions' => warehouseOptions
+                'lineItems' => lineItemDTOs,
+                'warehouseOptions' => warehouseOptions,
+                    'dcName' => challan.Name
                 };             
-                    }
+     }
     @AuraEnabled
     public static Id processGRN(Id challanId, List<Map<String, Object>> lineItems) {
         
@@ -89,51 +96,62 @@ public without sharing class GRNController {
         }
         
         Delivery_Challan__c inProcessDC = [
-            SELECT Id, Name, RecordType.DeveloperName, Supply_Order__c, Consignor_Distributor__c, DC_Generated_Date__c,
-            Consignor_Distributor__r.RecordTypeId, Consignee_Distributor__c, Consignee_Hospital__c, Consignor_Distributor__r.Business_Owner__c
+            SELECT Id, Name, RecordType.DeveloperName, Supply_Order__c, Consignor_Distributor__c, DC_Generated_Date__c,isGRNCreated__c,GRN_Number__c,
+            Consignor_Distributor__r.RecordTypeId, Consignee_Distributor__c, Consignee_Hospital__c, Consignor_Distributor__r.Business_Owner__c, consignor_Hospital__c
             FROM Delivery_Challan__c
             WHERE Id = :challanId
             LIMIT 1
         ];
-
+        
         GRN__c grn;
-        if (inProcessDC.RecordType.DeveloperName == 'DC') {
-            Account consigneeDistributor = [
-                SELECT Id, Business_Owner__c, Zydus_Price_Book__c 
-                FROM Account 
-                WHERE Id = :inProcessDC.Consignee_Distributor__c 
-                LIMIT 1
-            ];
+        if (inProcessDC.RecordType.DeveloperName != 'HDC' ) {
+            Account consigneeDistributor = [SELECT Id, Business_Owner__c, Zydus_Price_Book__c 
+                                            FROM Account 
+                                            WHERE Id = :inProcessDC.Consignee_Distributor__c 
+                                            LIMIT 1
+                                           ];
             
             if (consigneeDistributor.Business_Owner__c != userId) {
                 throw new AuraHandledException('Access denied: You are not authorized to create a GRN for this delivery challan.');
             }
             
             Id priceBookId = consigneeDistributor.Zydus_Price_Book__c;
-            Map<Id, Decimal> productToPriceMap = new Map<Id, Decimal>();
+            Map<Id, PriceBookData> productToPriceMap = new Map<Id, PriceBookData>();
+            
             
             if (priceBookId != null) {
                 for (Zydus_Price_Book_Entry__c entry : [
-                    SELECT Zydus_Product__c, Unit_Price__c 
+                    SELECT Zydus_Product__c, Unit_Price__c, Zydus_Product__r.MRP__c
                     FROM Zydus_Price_Book_Entry__c 
                     WHERE Zydus_Price_Book__c = :priceBookId AND Is_Active__c = true
                 ]) {
-                    productToPriceMap.put(entry.Zydus_Product__c, entry.Unit_Price__c);
+                    productToPriceMap.put(
+                        entry.Zydus_Product__c,
+                        new PriceBookData(entry.Unit_Price__c, entry.Zydus_Product__r.MRP__c)
+                    );
                 }
+                
             }
             
             Id rtID = [SELECT Id FROM RecordType WHERE SObjectType = 'GRN__c' AND DeveloperName = 'Manual_GRN' LIMIT 1].Id;
-             grn = new GRN__c(
+            grn = new GRN__c(
                 Delivery_Challan__c = challanId,
                 GRN_Date__c = System.today(),
                 RecordTypeId = rtID
             );
             insert grn;
-            
             Id SOid = inProcessDC.Supply_Order__c;
-            Id consignorAccount = inProcessDC.Consignor_Distributor__c;
-            Id consignorRecordTypeId = inProcessDC.Consignor_Distributor__r.RecordTypeId;
+            Id consignorAccount;
+            Id consignorRecordTypeId;
+            Id consignorHospital;
             Date dcDate = inProcessDC.DC_Generated_Date__c;
+            if(inProcessDC.Consignor_Distributor__c != null && inProcessDC.consignor_Hospital__c == null){
+                consignorAccount = inProcessDC.Consignor_Distributor__c;
+                consignorRecordTypeId = inProcessDC.Consignor_Distributor__r.RecordTypeId;
+            }else if(inProcessDC.Consignor_Distributor__c == null && inProcessDC.consignor_Hospital__c != null){
+                consignorHospital = inProcessDC.consignor_Hospital__c;
+            }
+            
             
             if (consignorRecordTypeId == accountRecordTypeMap.get('Zydus')) {
                 List<Supply_Order_Line_Item__c> sooliList = [
@@ -158,7 +176,7 @@ public without sharing class GRNController {
                     List<Primary_DC_Product_Line_Item__c> pdclList = [
                         SELECT Id, Batch_Number__c, Condition__c, Expiry_Date__c, Manufacturing_Date__c,
                         Serial_Number__c, Status__c, Supply_Order_Line_Item__c,
-                        Primary_DC_Product__c, Primary_DC_Product__r.Zydus_Product__c, Unit_Price__c, List_Price__c
+                        Primary_DC_Product__c, Primary_DC_Product__r.Zydus_Product__c
                         FROM Primary_DC_Product_Line_Item__c
                         WHERE Primary_DC__c = :sooliList[0].Primary_DC__c
                     ];
@@ -203,10 +221,7 @@ public without sharing class GRNController {
                         Warehouse_Product__c wp = productWarehouseMap.get(key);
                         
                         for (Primary_DC_Product_Line_Item__c pdclItem : pdclItems) {
-                            Decimal finalUnitPrice = productToPriceMap.containsKey(productId)
-                                ? productToPriceMap.get(productId)
-                                : pdclItem.Unit_Price__c;
-                            
+                            PriceBookData priceData = productToPriceMap.get(productId);
                             wpLineItemsToInsert.add(new Warehouse_Product_Line_Items__c(
                                 Warehouse__c = wp.Id,
                                 Connected_Warehouse__c = consignorWarehouseId,
@@ -217,11 +232,11 @@ public without sharing class GRNController {
                                 Condition__c = pdclItem.Condition__c,
                                 Status__c = 'Delivered',
                                 GRN__c = grn.Id,
-                                List_Price__c = pdclItem.List_Price__c,
                                 Supply_Order_Line_Item__c = pdclItem.Supply_Order_Line_Item__c,
                                 Supplied_Date__c = dcDate,
-                                Unit_Price__c = finalUnitPrice
+                                Unit_Price__c = priceData != null ? priceData.unitPrice : null
                             ));
+                            
                         }
                     }
                     
@@ -231,7 +246,7 @@ public without sharing class GRNController {
                     }
                 }
                 
-                update new Delivery_Challan__c(Id = challanId, isGRNCreated__c = true);
+                update new Delivery_Challan__c(Id = challanId, isGRNCreated__c = true, GRN_Number__c =grn.Id);
                 update new GRN__c(Id = grn.Id, Accepted_Products__c = acceptedProducts, Rejected_Products__c = rejectedProducts);
                 
                 Account notifyConsigneeAccount = [
@@ -271,24 +286,7 @@ public without sharing class GRNController {
                     WHERE Id = :grn.Id
                 ];
                 
-                if (!userIds.isEmpty()) {
-                    String subject = 'New GRN Created: ' + grn.Name;
-                    String body = 'Dear User,\n\n'
-                        + 'A new GRN (Goods Receipt Note) record "' + grn.Name + '" has been successfully created.\n\n'
-                        + 'Details:\n'
-                        + '- Accepted Quantity: ' + grn.Accepted_Products__c + '\n'
-                        + '- Rejected Quantity: ' + grn.Rejected_Products__c + '\n'
-                        + '- Against Delivery Challan: ' + grn.Delivery_Challan__r.Name + '\n\n'
-                        + 'Please review the GRN for further actions.\n\n'
-                        + 'Best regards,\nZydus DMS';
-                    
-                    NotificationService.notifyUsers(userIds, grn.Id, subject, body);
-                    
-                    if (!emailAddresses.isEmpty()) {
-                        NotificationService.sendEmail(emailAddresses, subject, body);
-                    }
-                }
-            } else {
+            } else if(consignorHospital == null){
                 Id consignorWarehouseId = [SELECT Id FROM Warehouse__c WHERE Account__c = :consignorAccount LIMIT 1].Id;
                 
                 List<Supply_Order_Line_Item__c> soLineItems = [SELECT Id FROM Supply_Order_Line_Item__c WHERE Supply_Order__c = :SOid];
@@ -304,6 +302,28 @@ public without sharing class GRNController {
                     ];
                     for (Warehouse_Product_Line_Items__c item : lineItemsToUpdate) {
                         item.Status__c = 'Delivered';
+                    }
+                    if(!lineItemsToUpdate.isEmpty()){
+                        update lineItemsToUpdate;
+                    }
+                }
+            }else if(consignorHospital != null && inProcessDC.RecordType.DeveloperName == 'RDC'){
+                Id consignorWarehouseId = [SELECT Id FROM Warehouse__c WHERE Hospital__c = :consignorHospital LIMIT 1].Id;
+                
+                List<Supply_Order_Line_Item__c> soLineItems = [SELECT Id FROM Supply_Order_Line_Item__c WHERE Supply_Order__c = :SOid];
+                Set<Id> soLineItemIds = new Set<Id>();
+                for (Supply_Order_Line_Item__c item : soLineItems) soLineItemIds.add(item.Id);
+                if (!soLineItemIds.isEmpty()) {
+                    List<Warehouse_Product_Line_Items__c> lineItemsToUpdate = [
+                        SELECT Id, Status__c, Serial_Number__c
+                        FROM Warehouse_Product_Line_Items__c
+                        WHERE Connected_Warehouse__c = : consignorWarehouseId
+                        AND Supply_Order_Line_Item__c IN : soLineItemIds
+                        AND Status__c = 'Material Returned'
+                    ];
+                    for (Warehouse_Product_Line_Items__c item : lineItemsToUpdate) {
+                        item.Status__c = 'Delivered';
+                        item.isMaterialReturned__c = true;
                     }
                     if(!lineItemsToUpdate.isEmpty()){
                         update lineItemsToUpdate;
@@ -341,8 +361,8 @@ public without sharing class GRNController {
             if (!toInsertWarehouseProducts.isEmpty()) insert toInsertWarehouseProducts;
             
             Delivery_Challan__c curDC = [
-                SELECT Id, Consignee_Distributor__c, DC_Generated_Date__c,
-                (SELECT Id, Expiry_Date__c, Serial_Number__c, Batch_Number__c, Manufacturing_Date__c, Unit_Price__c, List_Price__c
+                SELECT Id, Consignee_Distributor__c, DC_Generated_Date__c,isGRNCreated__c,GRN_Number__c,
+                (SELECT Id, Expiry_Date__c, Serial_Number__c, Batch_Number__c, Manufacturing_Date__c, Unit_Price__c
                  FROM Delivery_Challan_Line_Items__r)
                 FROM Delivery_Challan__c
                 WHERE Id = :challanId
@@ -356,8 +376,9 @@ public without sharing class GRNController {
             List<Warehouse_Product_Line_Items__c> toInsertLineItems = new List<Warehouse_Product_Line_Items__c>();
             Integer acceptedProducts = 0;
             Integer rejectedProducts = 0;
-            
+            List<Warehouse_Product_Line_Items__c> existingWPLIToUpdate = new List<Warehouse_Product_Line_Items__c>();
             for (Map<String, Object> li : lineItems) {
+                
                 Id productId = Id.valueOf((String) li.get('productId'));
                 Id warehouseId = Id.valueOf((String) li.get('selectedWarehouseId'));
                 String status = (String) li.get('status');
@@ -368,34 +389,48 @@ public without sharing class GRNController {
                 String key = productId + '-' + warehouseId;
                 Warehouse_Product__c wp = productWarehouseMap.get(key);
                 Delivery_Challan_Line_Item__c dcItem = dcLineItemMap.get(serialNumber);
-                
-                Warehouse_Product_Line_Items__c item = new Warehouse_Product_Line_Items__c(
-                    GRN__c = grn.Id,
-                    Warehouse__c = wp.Id,
-                    Connected_Warehouse__c = warehouseId,
-                    List_Price__c = dcItem?.List_Price__c,
-                    Unit_Price__c = dcItem?.Unit_Price__c,
-                    Serial_Number__c = dcItem?.Serial_Number__c,
-                    Batch_Number__c = dcItem?.Batch_Number__c,
-                    Supplied_Date__c = curDC.DC_Generated_Date__c,
-                    Manufactured_Date__c = dcItem?.Manufacturing_Date__c,
-                    Expiry_Date__c = dcItem?.Expiry_Date__c,
-                    Condition__c = status == 'Rejected' ? (rejectionReason == 'Others' ? 'Others' : rejectionReason) : 'Good',
-                    Status__c = 'Free',
-                    Delivery_Challan_Line_Item__c = dcItem.Id,
-                    Rejection_Comment__c = (status == 'Rejected' && rejectionReason == 'Others') ? rejectionComment : null
-                );
-                
-                
-                if (status == 'Accepted') acceptedProducts++;
-                if (status == 'Rejected') rejectedProducts++;
-                
-                toInsertLineItems.add(item);
+                if(inProcessDC.RecordType.DeveloperName != 'RDC'){
+                    Warehouse_Product_Line_Items__c item = new Warehouse_Product_Line_Items__c(
+                        GRN__c = grn.Id,
+                        Warehouse__c = wp.Id,
+                        Connected_Warehouse__c = warehouseId,
+                        Unit_Price__c = dcItem?.Unit_Price__c,
+                        Serial_Number__c = dcItem?.Serial_Number__c,
+                        Batch_Number__c = dcItem?.Batch_Number__c,
+                        Supplied_Date__c = curDC.DC_Generated_Date__c,
+                        Manufactured_Date__c = dcItem?.Manufacturing_Date__c,
+                        Expiry_Date__c = dcItem?.Expiry_Date__c,
+                        Condition__c = status == 'Rejected' ? (rejectionReason == 'Others' ? 'Others' : rejectionReason) : 'Good',
+                        Status__c = 'Available',
+                        Delivery_Challan_Line_Item__c = dcItem.Id,
+                        Rejection_Comment__c = (status == 'Rejected' && rejectionReason == 'Others') ? rejectionComment : null
+                    );
+                    
+                    
+                    if (status == 'Accepted') acceptedProducts++;
+                    if (status == 'Rejected') rejectedProducts++;
+                    
+                    toInsertLineItems.add(item);
+                }else{
+                    Warehouse_Product_Line_Items__c existingWPLI = [SELECT Id FROM Warehouse_Product_Line_Items__c 
+                                                                    WHERE Connected_Warehouse__c=: warehouseId AND Serial_Number__c =: dcItem?.Serial_Number__c];
+                    if(existingWPLI !=null){
+                        existingWPLI.Condition__c = status == 'Rejected' ? (rejectionReason == 'Others' ? 'Others' : rejectionReason) : 'Good';
+                        existingWPLI.Status__c= 'Available';
+                        existingWPLI.Rejection_Comment__c = (status == 'Rejected' && rejectionReason == 'Others') ? rejectionComment : null;
+                        existingWPLIToUpdate.add(existingWPLI);
+                        
+                        if (status == 'Accepted') acceptedProducts++;
+                        if (status == 'Rejected') rejectedProducts++;
+                    }
+                }
             }
             
             if (!toInsertLineItems.isEmpty()) insert toInsertLineItems;
             
-            update new Delivery_Challan__c(Id = challanId, isGRNCreated__c = true);
+            if(existingWPLIToUpdate != null) update existingWPLIToUpdate;
+            
+            update new Delivery_Challan__c(Id = challanId, isGRNCreated__c = true , GRN_Number__c =grn.Id );
             update new GRN__c(Id = grn.Id, Accepted_Products__c = acceptedProducts, Rejected_Products__c = rejectedProducts);
             
             Account notifyConsigneeAccount = [
@@ -404,14 +439,24 @@ public without sharing class GRNController {
                 WHERE Id = :inProcessDC.Consignee_Distributor__c 
                 LIMIT 1
             ];
-            
-            Account notifyConsignorAccount = [
-                SELECT Id, Business_Owner__c, Business_Owner__r.Email, Business_Owner__r.Name 
-                FROM Account 
-                WHERE Id = :inProcessDC.Consignor_Distributor__c 
-                LIMIT 1
-            ];
-            
+            Account notifyConsignorAccount;
+            if(consignorHospital == null){
+                notifyConsignorAccount = [
+                    SELECT Id, Business_Owner__c, Business_Owner__r.Email, Business_Owner__r.Name 
+                    FROM Account 
+                    WHERE Id = :inProcessDC.Consignor_Distributor__c 
+                    LIMIT 1
+                ];
+            }
+            Hospital__c notifyHospital;
+            if (consignorHospital != null) {
+                notifyHospital = [
+                    SELECT Id, Contact_Email__c, CC_Email_Address__c 
+                    FROM Hospital__c 
+                    WHERE Id = :consignorHospital 
+                    LIMIT 1
+                ];
+            }
             Set<String> userIds = new Set<String>();
             List<String> emailAddresses = new List<String>();
             
@@ -422,18 +467,63 @@ public without sharing class GRNController {
                 }
             }
             
-            if (notifyConsignorAccount.Business_Owner__c != null) {
+            if (notifyConsignorAccount != null && notifyConsignorAccount.Business_Owner__c != null) {
                 userIds.add(notifyConsignorAccount.Business_Owner__c);
                 if (notifyConsignorAccount.Business_Owner__r.Email != null) {
                     emailAddresses.add(notifyConsignorAccount.Business_Owner__r.Email);
                 }
             }
             
+            if (notifyHospital != null) {
+                if (notifyHospital.Contact_Email__c != null) {
+                    emailAddresses.add(notifyHospital.Contact_Email__c);
+                }
+                if (notifyHospital.CC_Email_Address__c != null) {
+                    emailAddresses.addAll(notifyHospital.CC_Email_Address__c.split(';'));
+                }
+            }
             grn = [
-                SELECT Id, Name, Accepted_Products__c, Rejected_Products__c, Delivery_Challan__r.Name 
+                SELECT Id, Name, Accepted_Products__c, Rejected_Products__c, 
+                Delivery_Challan__r.Name,
+                Delivery_Challan__r.Supply_Order__r.New_Purchase_order__c
                 FROM GRN__c 
                 WHERE Id = :grn.Id
             ];
+            String supplyOrderRecordType = [
+                SELECT RecordType.DeveloperName 
+                FROM Supply_Order__c 
+                WHERE Id = :grn.Delivery_Challan__r.Supply_Order__c 
+                LIMIT 1
+            ].RecordType.DeveloperName;
+            Boolean isPOClosed = false;
+            String poName = '';
+            String comment = '0';
+            
+            if (supplyOrderRecordType != 'RSO') {
+                List<Purchase_Order__c> toUpdateCurList = new List<Purchase_Order__c>();
+                List<Purchase_Order__c> poList = [
+                    SELECT Id, Name, StageName__c, Total_Ordered_Quantity__c, 
+                    Total_Pending_Quantity__c, Total_Supplied_Quantity__c, Manual_Closure_Reason__c
+                    FROM Purchase_Order__c 
+                    WHERE Id = :grn.Delivery_Challan__r.Supply_Order__r.New_Purchase_order__c
+                ];
+                
+                for (Purchase_Order__c curPO : poList) {
+                    if (curPO.Total_Ordered_Quantity__c == curPO.Total_Supplied_Quantity__c) {
+                        curPO.StageName__c = 'Purchase Order Closed';
+                        curPO.CloseDate__c = System.today();
+                        isPOClosed = true;
+                        poName = curPO.Name;
+                        curPO.Manual_Closure_Reason__c = 'System Generated Message : Material Received Completely.';
+                        comment = curPO.Manual_Closure_Reason__c;
+                    }
+                    toUpdateCurList.add(curPO);
+                }
+                
+                if (!toUpdateCurList.isEmpty()) {
+                    update toUpdateCurList;
+                }
+            }
             
             if (!userIds.isEmpty()) {
                 String subject = 'New GRN Created: ' + grn.Name;
@@ -443,21 +533,32 @@ public without sharing class GRNController {
                     + 'Details:\n'
                     + '- Accepted Quantity: ' + grn.Accepted_Products__c + '\n'
                     + '- Rejected Quantity: ' + grn.Rejected_Products__c + '\n'
-                    + '- Against Delivery Challan: ' + grn.Delivery_Challan__r.Name + '\n\n'
-                    + 'Please review the GRN for further actions.\n\n'
-                    + 'Best regards,\nZydus DMS';
+                    + '- Against Delivery Challan: ' + grn.Delivery_Challan__r.Name + '\n';
                 
-                // Notification
+                if (isPOClosed && String.isNotBlank(poName)) {
+                    body += '- Purchase Order "' + poName + '" is marked as Closed with comment: ' + comment + '\n';
+                }
+                
+                body += '\nPlease review the GRN for further actions.\n\nBest regards,\nZydus DMS';
+                
                 NotificationService.notifyUsers(userIds, grn.Id, subject, body);
                 
-                // Email
                 if (!emailAddresses.isEmpty()) {
                     NotificationService.sendEmail(emailAddresses, subject, body);
                 }
-            }
+            }              
             
         }
+        return grn.Id; 
+    }
+    public class PriceBookData {
+        public Decimal unitPrice;
+        public Decimal listPrice;
         
-    return grn.Id;
-    }   
+        public PriceBookData(Decimal unitPrice, Decimal listPrice) {
+            this.unitPrice = unitPrice;
+            this.listPrice = listPrice;
+        }
+    }
+    
 }

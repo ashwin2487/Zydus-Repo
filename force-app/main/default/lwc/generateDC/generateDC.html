@@ -1,21 +1,58 @@
 <template>
-    <div class="slds-p-around_medium slds-text-align_center">
-        <!-- Warning icon -->
-        <lightning-icon icon-name="utility:warning" alternative-text="Warning" variant="warning" size="large">
-        </lightning-icon>
+    <lightning-modal-header label="Enter Courier Details"></lightning-modal-header>
 
-        <!-- Prompt -->
-        <p class="slds-m-top_small">
-            Are you sure you want to generate a Delivery Challan for the current Sales Order?
+    <lightning-modal-body>
+        <p class="slds-p-bottom_small">
+            Please provide the following details and click '{DCLable}' to generate the Delivery Challan.
         </p>
 
-        <!-- Action buttons -->
-        <div class="slds-m-top_medium">
-            <lightning-button variant="neutral" label="Cancel" onclick={closeCreateDCModal} class="slds-m-right_small">
-            </lightning-button>
+        <div class="slds-grid slds-gutters slds-wrap">
+            <div class="slds-col slds-size_1-of-2">
+                <lightning-input 
+                    type="text" 
+                    label="Courier Name" 
+                    value={courierName} 
+                    onchange={handleCourierNameChange}
+                    required>
+                </lightning-input>
+            </div>
 
-            <lightning-button variant="brand" label="Create Delivery Challan" onclick={createDC}>
-            </lightning-button>
+            <div class="slds-col slds-size_1-of-2">
+                <lightning-input 
+                    type="text" 
+                    label="Courier Docket No." 
+                    value={courierDocket} 
+                    onchange={handleCourierDocketChange}
+                    required>
+                </lightning-input>
+            </div>
+
+            <div class="slds-col slds-size_1-of-2">
+                <lightning-input 
+                    type="date" 
+                    label="Courier Date" 
+                    value={courierDate} 
+                    onchange={handleCourierDateChange}
+                    min={minDate}
+                    required>
+                </lightning-input>
+            </div>
         </div>
-    </div>
+    </lightning-modal-body>
+
+    <lightning-modal-footer>
+        <lightning-button 
+            variant="neutral" 
+            label="Cancel" 
+            onclick={closeCreateDCModal}>
+        </lightning-button>
+
+        <lightning-button 
+            variant="brand" 
+            label={DCLable} 
+            onclick={createDC} 
+            disabled={disableCreateDCBtn}
+            class="slds-m-left_x-small">
+        </lightning-button>
+    </lightning-modal-footer>
 </template>

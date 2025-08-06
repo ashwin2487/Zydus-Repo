@@ -88,6 +88,7 @@ public without sharing class DistributorOnboardingController {
                 Drug_Licence_Number__c       = data.drugLicenceNumber,
                 Validity_of_Drug_Licence__c  = data.validTillDate,
                 RecordTypeId                 = recordTypeId,
+                Payment_Mode__c				 = data.selectedPaymentMode,
                 L1_Approved__c               = false,
                 L2_Approved__c               = false,
                 Active__c                    = false,
@@ -208,6 +209,7 @@ public without sharing class DistributorOnboardingController {
         @AuraEnabled public String drugLicenceNumber;
         @AuraEnabled public Date validTillDate;
         @AuraEnabled public String paymentTerm;
+        @AuraEnabled public String selectedPaymentMode;
         @AuraEnabled public List<FileUpload> uploadedFiles;
     }
 

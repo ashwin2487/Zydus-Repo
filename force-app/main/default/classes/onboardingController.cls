@@ -152,18 +152,66 @@ public without sharing class onboardingController {
     
     @AuraEnabled(cacheable=true)
     public static List<Hospital__c> getHospitalOptions() {
-        return [SELECT Id, Name FROM Hospital__c ORDER BY Name ASC];
-    }
-    
-    @AuraEnabled(cacheable=true)
-    public static List<Zydus_Product__c> getProductOptions() {
-        return [SELECT Id, Name FROM Zydus_Product__c ORDER BY Name ASC];
+        try {
+            List<Account_Hospital__c> junctions = [
+                SELECT Hospital__r.Id, Hospital__r.Name 
+                FROM Account_Hospital__c 
+                WHERE Account__r.Business_Owner__c = :UserInfo.getUserId()
+                ORDER BY Hospital__r.Name ASC
+            ];
+            
+            List<Hospital__c> hospitalOptions = new List<Hospital__c>();
+            for (Account_Hospital__c ah : junctions) {
+                hospitalOptions.add(ah.Hospital__r);
+            }
+            return hospitalOptions;
+            
+        } catch (Exception e) {
+            throw new AuraHandledException('Error fetching hospital options: ' + e.getMessage());
+        }
     }
     
     @AuraEnabled(cacheable=true)
     public static List<Zydus_Price_Book__c> getPriceBookOptions() {
+        Id dealerRecordTypeId;
         try {
-            return [SELECT Id, Price_Book_Name__c FROM Zydus_Price_Book__c WHERE IsActive__c = TRUE];
+            dealerRecordTypeId = Schema.SObjectType.Zydus_Price_Book__c.getRecordTypeInfosByName().get('Dealer').getRecordTypeId();
+        } catch (Exception e) {
+            throw new AuraHandledException('The "Dealer" Price Book record type was not found. Please contact your administrator.');
+        }
+        
+        try {
+            return [
+                SELECT Id, Name 
+                FROM Zydus_Price_Book__c 
+                WHERE IsActive__c = TRUE 
+                AND OwnerId = :UserInfo.getUserId() 
+                AND RecordTypeId = :dealerRecordTypeId
+            ];
+        } catch (Exception e) {
+            throw new AuraHandledException('Error fetching Pricebook options: ' + e.getMessage());
+        }
+    }
+    
+    @AuraEnabled(cacheable=true)
+    public static List<Zydus_Price_Book__c> getPriceBookOptionsHosp() {
+        Id dealerRecordTypeId;
+        try {
+            dealerRecordTypeId = Schema.SObjectType.Zydus_Price_Book__c.getRecordTypeInfosByName().get('Hospital').getRecordTypeId();
+        } catch (Exception e) {
+            
+            throw new AuraHandledException('The "Hospital" Price Book record type was not found. Please contact your administrator.');
+        }
+        
+        try {
+            return [
+                SELECT Id, Name 
+                FROM Zydus_Price_Book__c 
+                WHERE IsActive__c = TRUE 
+                AND OwnerId = :UserInfo.getUserId() 
+                AND RecordTypeId = :dealerRecordTypeId
+                
+            ];
         } catch (Exception e) {
             throw new AuraHandledException('Error fetching Pricebook options: ' + e.getMessage());
         }

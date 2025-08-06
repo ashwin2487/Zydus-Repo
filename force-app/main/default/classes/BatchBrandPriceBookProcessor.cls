@@ -10,7 +10,7 @@ global class BatchBrandPriceBookProcessor implements Database.Batchable<SObject>
         return Database.getQueryLocator([
             SELECT Id, RecordTypeId, Zydus_Product__c, Zydus_Price_Book__c, Brand__c,
                    ARS_Minimum_Stock_Threshold__c, Bill_Discount_Amount__c, Credit_Note_Amount__c,
-                   List_Price__c, Minimum_Order_Quantity_MOQ__c, Unit_Price__c, Use_Brand_Pricing__c,
+                   Minimum_Order_Quantity_MOQ__c, Unit_Price__c,
                    Processed__c
             FROM Zydus_Price_Book_Entry__c
             WHERE Id IN :entryIds AND Processed__c = false

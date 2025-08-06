@@ -1,96 +1,90 @@
 <template>
-    <!-- Warehouse Selector -->
-    <div class="slds-grid slds-grid_align-end slds-p-around_medium ">
-        <lightning-combobox label="Select Warehouse" value={selectedWarehouseId} options={warehouseOptions}
-            onchange={handleWarehouseChange} style="width: 300px;">
-        </lightning-combobox>
-    </div>
+    <lightning-card title="Warehouse Inventory" icon-name="utility:database">
 
-    <lightning-card>
+        <div slot="actions">
+            <lightning-combobox label="Select Warehouse" value={selectedWarehouseId} options={warehouseOptions}
+                onchange={handleWarehouseChange} style="width: 300px;">
+            </lightning-combobox>
+        </div>
+
         <div class="slds-p-around_medium">
 
-            <!-- Filter + Reverse Button Toolbar: Visible when warehouse is selected -->
-            <template if:true={isWarehouseSelected}>
-                <template if:false={showReverseTable}>
-                <div class="slds-grid slds-grid_align-spread slds-m-bottom_medium">
-                    <div class="slds-col">
-                        <lightning-combobox label="Filter by Status" value={selectedStatus} options={statusOptions}
-                            onchange={handleStatusOptionsChange}>
-                        </lightning-combobox>
-                    </div>
-                    <template if:true={showReverseSOBtn}>
-                        <div class="slds-col slds-align-bottom">
-                            <lightning-button label="Reverse SO" onclick={handleReverseClick}>
+            <template if:true={isLoading}>
+                <div class="slds-is-relative" style="height: 10rem;">
+                    <lightning-spinner alternative-text="Loading..." size="medium"></lightning-spinner>
+                </div>
+            </template>
+
+            <template if:false={isLoading}>
+                <template if:true={isWarehouseSelected}>
+
+                    <template if:false={showReverseTable}>
+                        <div class="slds-grid slds-grid_vertical-align-end slds-m-bottom_medium">
+                            <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-5">
+                                <lightning-combobox label="Filter by Status" value={selectedStatus}
+                                    options={statusOptions} onchange={handleStatusOptionsChange}>
+                                </lightning-combobox>
+                            </div>
+                            <div class="slds-col slds-text-align_right">
+                                <template if:true={showReverseSOBtn}>
+                                    <lightning-button label="Reverse SO"
+                                        onclick={handleReverseClick}></lightning-button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <template if:true={tableData.length}>
+                            <lightning-datatable key-field="serialNumber" data={tableData} columns={columns}
+                                column-widths-mode="auto" hide-checkbox-column="true">
+                            </lightning-datatable>
+                        </template>
+                        <template if:false={tableData.length}>
+                            <lightning-datatable key-field="serialNumber" data={tableDataForInTransit}
+                                columns={columnsForInTransit} column-widths-mode="auto" hide-checkbox-column="true">
+                            </lightning-datatable>
+                        </template>
+
+                        <template if:false={hasData}>
+                            <div class="slds-align_absolute-center slds-text-color_weak slds-m-vertical_large">
+                                <p>No inventory data available for the selected status.</p>
+                            </div>
+                        </template>
+                    </template>
+
+                    <template if:true={showReverseTable}>
+                        <div class="slds-grid slds-m-bottom_medium">
+                            <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-5">
+                                <lightning-combobox label="Filter by Condition" value={selectedCondition}
+                                    options={conditionOptions} onchange={handleConditionChange}>
+                                </lightning-combobox>
+                            </div>
+                        </div>
+
+                        <template if:true={reverseSOTableData.length}>
+                            <lightning-datatable key-field="Id" data={reverseSOTableData} columns={wpliColumns}
+                                onrowselection={handleRowSelection}>
+                            </lightning-datatable>
+                        </template>
+
+                        <template if:false={reverseSOTableData.length}>
+                            <div class="slds-align_absolute-center slds-text-color_weak slds-m-vertical_large">
+                                <p>No data available for the selected condition.</p>
+                            </div>
+                        </template>
+
+                        <div class="slds-border_top slds-p-top_medium slds-m-top_medium slds-text-align_right">
+                            <lightning-button label="Back" onclick={handleBackClick} class="slds-m-right_small">
+                            </lightning-button>
+                            <lightning-button variant="brand" label="Proceed" onclick={handleProceed}
+                                disabled={isProceedDisabled}>
                             </lightning-button>
                         </div>
                     </template>
-                </div>
-                </template>
-            </template>
-
-            <!-- Spinner -->
-            <template if:true={isLoading}>
-                <div class="slds-align_absolute-center" style="height:5rem">
-                    <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
-                </div>
-            </template>
-
-            <!-- Standard Inventory Table -->
-            <template if:false={showReverseTable}>
-                <template if:true={tableData.length}>
-                    <lightning-datatable key-field="serialNumber" data={tableData} columns={columns}
-                        column-widths-mode="auto" hide-checkbox-column="true">
-                    </lightning-datatable>
-                </template>
-            </template>
-
-            <!-- Reverse Table -->
-            <template if:true={showReverseTable}>
-                <div class="slds-grid slds-grid_align-spread slds-m-bottom_medium">
-                    <div class="slds-col">
-                        <lightning-combobox label="Filter by Condition" value={selectedCondition}
-                            options={conditionOptions} onchange={handleConditionChange}>
-                        </lightning-combobox>
-                    </div>
-                </div>
-
-                <template if:true={reverseSOTableData.length}>
-                    <lightning-datatable key-field="Id" data={reverseSOTableData} columns={wpliColumns}
-                        onrowselection={handleRowSelection}>
-                    </lightning-datatable>
                 </template>
 
-                <template if:false={reverseSOTableData.length}>
-                    <template if:false={isLoading}>
-
-                        <lightning-datatable key-field="Id" data={emptyArray} columns={wpliColumns}
-                            hide-checkbox-column>
-                        </lightning-datatable>
-                        <div class="slds-text-align_center slds-m-top_medium slds-m-bottom_medium">
-                            <p>No data available for the selected condition.</p>
-                        </div>
-                    </template>
-                </template>
-
-                <div class="slds-grid slds-grid_align-end slds-m-top_medium">
-                    <lightning-button label="Back" onclick={handleBackClick} class="slds-m-right_small">
-                    </lightning-button>
-                    <lightning-button variant="brand" label="Proceed" onclick={handleProceed}
-                        disabled={isProceedDisabled}>
-                    </lightning-button>
-                </div>
-            </template>
-
-            <!-- No Data Message -->
-            <template if:false={tableData.length}>
-                <template if:false={isLoading}>
-                    <div class="slds-text-align_center slds-m-top_large">
-                        <template if:true={isWarehouseSelected}>
-                            No Data Available.
-                        </template>
-                        <template if:false={isWarehouseSelected}>
-                            Select a warehouse to view the inventory.
-                        </template>
+                <template if:false={isWarehouseSelected}>
+                    <div class="slds-align_absolute-center slds-text-color_weak" style="height: 10rem;">
+                        <p>Please select a warehouse to view inventory.</p>
                     </div>
                 </template>
             </template>

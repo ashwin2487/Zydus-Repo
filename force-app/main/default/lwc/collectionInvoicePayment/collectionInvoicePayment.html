@@ -1,0 +1,87 @@
+<template>
+    <lightning-quick-action-panel header="Settlement">
+        <div class="slds-grid slds-grid_vertical slds-is-relative" style="min-height: 150px;">
+            <template if:true={isLoaded}>
+                <lightning-spinner alternative-text="Loading" size="large"></lightning-spinner>
+            </template>
+            <template if:false={isLoaded}>
+                <div class="slds-col">
+                    <div class="slds-box slds-theme_shade slds-p-around_medium slds-m-bottom_medium">
+                        <div class="slds-grid slds-wrap slds-gutters_small">
+                            <div class="slds-col slds-size_1-of-1 slds-m-bottom_xx-small">
+                                <span class="slds-text-title_bold slds-text-color_weak">Collected Amount: </span>
+                                <span class="slds-m-left_xx-small">{collectedAmount}</span>
+                            </div>
+                            <div class="slds-col slds-size_1-of-1 slds-m-bottom_xx-small">
+                                <span class="slds-text-title_bold slds-text-color_weak">Consumed Amount: </span>
+                                <span class="slds-m-left_xx-small">{consumedAmount}</span>
+                            </div>
+                            <div class="slds-col slds-size_1-of-1">
+                                <span class="slds-text-title_bold slds-text-color_weak">Remaining Amount: </span>
+                                <span class="slds-m-left_xx-small">{calCollectedAmount}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <template if:true={isInvoicesLineItem}>
+
+                    <div class="slds-col">
+                        <div class="slds-table_edit_container slds-is-relative">
+                            <table
+                                class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered slds-table_fixed-layout"
+                                style="width: 100%;">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" style="text-wrap: auto;">Invoice Name </th>
+                                        <th scope="col" style="text-wrap: auto;">Invoice Date</th>
+                                        <th scope="col" style="text-wrap: auto;">Invoice Due Date</th>
+                                        <th scope="col" style="text-wrap: auto;">Quantity</th>
+                                        <th scope="col" style="text-wrap: auto;">Total Amount</th>
+                                        <th scope="col" style="text-wrap: auto;">Last Collected Amount</th>
+                                        <th scope="col" style="text-wrap: auto;">Pending Amount</th>
+                                        <th scope="col" style="text-wrap: auto;">Enter Collected Amount</th>
+
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={invoicesLineItem} for:item="inv" for:index="index">
+                                        <tr key={inv.Id}>
+
+                                            <td> <a href={inv.invoiceUrl} target="_blank"> {inv.invoiceName} </a></td>
+                                            <td>{inv.invoiceDate}</td>
+                                            <td>{inv.invoiceDueDate}</td>
+                                            <td>{inv.invoiceQuantity}</td>
+                                            <td>{inv.invoiceTotalAmount}</td>
+                                            <td>{inv.invoiceLastCollectedAmount}</td>
+                                            <td>{inv.invoicePendingAmount}</td>
+                                            <td>
+                                                <lightning-input type="number" data-index={index}
+                                                    value={inv.collectedAmount} onchange={handleAmountChange}
+                                                    step="0.01" min="0" variant="label-hidden">
+                                                </lightning-input>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </template>
+                <template if:false={isInvoicesLineItem}>
+                    <div class="slds-col slds-align_absolute-center">
+                        <p class="slds-text-heading_medium">No Bills Pending for Settlement</p>
+                    </div>
+                </template>
+            </template>
+        </div>
+        <div slot="footer">
+            <lightning-button variant="neutral" label="Cancel" onclick={handleClose}></lightning-button>
+            <lightning-button variant="brand" label="Make Settlement" class="slds-m-left_x-small" onclick={handleSave}
+                disabled={isInvoicesSave}>
+            </lightning-button>
+        </div>
+    </lightning-quick-action-panel>
+
+
+</template>

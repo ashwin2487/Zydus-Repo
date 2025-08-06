@@ -11,7 +11,7 @@ export default class DCDownloadPage extends LightningElement {
     deliveryChallan;
     error;
     jsPDFLoaded = false;
-    hospitalRecType;
+    hospitalRecordType;
 
     // Consignor Details
     consignorName;
@@ -81,6 +81,8 @@ export default class DCDownloadPage extends LightningElement {
     consigneeWarehouse;
 
     comment;
+    shipTitle;
+    RDCTitle = false;
 
     async connectedCallback() {
         try {
@@ -152,17 +154,27 @@ export default class DCDownloadPage extends LightningElement {
 
             this.comment = this.deliveryChallan.Comment__c || 'Not Available';
 
-            if (this.hospitalRecType === 'HDC') {
+            if (this.hospitalRecordType == 'RDC') {
+                this.RDCTitle = true;
+            }
+
+            if (this.hospitalRecordType == 'HDC') {
                 const consigneeHospital = this.deliveryChallan.Consignee_Hospital__r || {};
 
                 this.consigneeName = consigneeHospital.Name || 'Not Available';
                 this.consigneeAddress = consigneeHospital.Address__c || 'Not Available';
                 this.consigneeCity = consigneeHospital.City__c || 'Not Available';
                 this.consigneeState = consigneeHospital.State__c || 'Not Available';
-                this.consigneePinCode = consigneeHospital.Account_Pin_Code__c || 'Not Available';
+                this.consigneePinCode = consigneeHospital.Hospital_Pin_Code__c || 'Not Available';
                 this.consigneePanNumber = consigneeHospital.PAN_Number__c || 'Not Available';
                 this.consigneeGstNumber = consigneeHospital.GST_Number__c || 'Not Available';
                 this.consigneeDLNumber = consigneeHospital.DL_no__c || 'Not Available';
+                this.shipTitle = consigneeHospital.Ship_Title__c || 'Not Available';
+
+                this.consigneeShipAddress = this.consigneeAddress || 'Not Available';
+                this.consigneeShipCity = this.consigneeCity || 'Not Available';
+                this.consigneeShipPinCode = this.consigneePinCode || 'Not Available';
+                this.consigneeShipState = this.consigneeState || 'Not Available';
 
             } else {
                 // Consignee Details - Create default if not exists
@@ -178,10 +190,10 @@ export default class DCDownloadPage extends LightningElement {
                 console.log('Consignee Details:', JSON.stringify(consignee));
 
                 // consignee ship address
-                this.consigneeShipAddress = this.consigneeWarehouse.Address__c || 'Not Available';
-                this.consigneeShipCity = this.consigneeWarehouse.City__c || 'Not Available';
-                this.consigneeShipPinCode = this.consigneeWarehouse.ZipCode__c || 'Not Available';
-                this.consigneeShipState = this.consigneeWarehouse.State__c || 'Not Available';
+                //this.consigneeShipAddress = this.consigneeWarehouse.Address__c || 'Not Available';
+                // this.consigneeShipCity = this.consigneeWarehouse.City__c || 'Not Available';
+                // this.consigneeShipPinCode = this.consigneeWarehouse.ZipCode__c || 'Not Available';
+                // this.consigneeShipState = this.consigneeWarehouse.State__c || 'Not Available';
             }
 
             // Order Info
@@ -305,14 +317,6 @@ export default class DCDownloadPage extends LightningElement {
                     }
                 });
             }
-
-            // Calculate total tax rates
-            // this.totalCGSTRate = this.totalTaxableValue > 0 ?
-            //     this.formatRate((this.totalCGSTAmount / this.totalTaxableValue) * 100) : 0;
-            // this.totalSGSTRate = this.totalTaxableValue > 0 ?
-            //     this.formatRate((this.totalSGSTAmount / this.totalTaxableValue) * 100) : 0;
-            // this.totalIGSTRate = this.totalTaxableValue > 0 ?
-            //     this.formatRate((this.totalIGSTAmount / this.totalTaxableValue) * 100) : 0;
 
             this.totalCGSTRate = this.deliveryChallanLineItems.reduce((sum, item) => sum + parseFloat(item.CGSTRate || 0), 0).toFixed(2);
             this.totalSGSTRate = this.deliveryChallanLineItems.reduce((sum, item) => sum + parseFloat(item.SGSTRate || 0), 0).toFixed(2);
@@ -480,6 +484,10 @@ export default class DCDownloadPage extends LightningElement {
         this.amountInWords = 'RUPEES ZERO AND ZERO PAISA ONLY';
     }
 
+    get isNotRDC() {
+        return this.RDCTitle;
+    }
+
     // Helper method to format rates to 2 decimal places
     formatRate(rate) {
         return Math.round(rate * 100) / 100;
@@ -563,6 +571,7 @@ export default class DCDownloadPage extends LightningElement {
             this.generatePDF();
         } catch (error) {
             console.error('Error generating PDF:', error);
+            console.log(error.message);
             this.showToast('Error', 'Failed to generate PDF. Please try again.', 'error');
         }
     }
@@ -583,17 +592,20 @@ export default class DCDownloadPage extends LightningElement {
         doc.setLineWidth(0.5);
         doc.setDrawColor(150, 150, 150);
 
-        // Company Name (Logo section)
-        // doc.setFontSize(20);
-        // doc.setFont('helvetica', 'bold');
-        // doc.setTextColor(44, 90, 160);
-        // doc.text(this.consignorName || 'N/A', margin, yPosition);
-        // yPosition += 15;
-
         // Full-Width Title with Bordered Box
+        // doc.setFontSize(18);
+        // doc.setTextColor(0, 0, 0);
+        // const titleText = 'DELIVERY CHALLAN';
+        // doc.rect(margin, yPosition, pageWidth - margin * 2, 12);
+        // doc.setFillColor(249, 249, 249);
+        // doc.rect(margin, yPosition, pageWidth - margin * 2, 12, 'F');
+        // doc.setFont('helvetica', 'bold');
+        // doc.text(titleText, pageWidth / 2, yPosition + 8, { align: 'center' });
+        // yPosition += 20;
+
         doc.setFontSize(18);
         doc.setTextColor(0, 0, 0);
-        const titleText = 'DELIVERY CHALLAN';
+        const titleText = this.RDCTitle ? 'RETURN NOTE' : 'DELIVERY CHALLAN';
         doc.rect(margin, yPosition, pageWidth - margin * 2, 12);
         doc.setFillColor(249, 249, 249);
         doc.rect(margin, yPosition, pageWidth - margin * 2, 12, 'F');
@@ -673,9 +685,13 @@ export default class DCDownloadPage extends LightningElement {
         // Right side - Order Info
         xPosition = margin + leftSectionWidth;
         doc.rect(xPosition, yPosition, rightSectionWidth, topBlockHeight);
+        // doc.setFont('helvetica', 'bold');
+        // tempY = yPosition + 6;
+        // doc.text(`Delivery Challan No :-`, xPosition + 2, tempY);
         doc.setFont('helvetica', 'bold');
         tempY = yPosition + 6;
-        doc.text(`Delivery Challan No :-`, xPosition + 2, tempY);
+        const challanLabel = this.RDCTitle ? 'Return Note No' : 'Delivery Challan No';
+        doc.text(`${challanLabel} :-`, xPosition + 2, tempY);
         doc.setFont('helvetica', 'normal');
         doc.text(`${this.deliveryChallanNumber || ''}`, xPosition + 40, tempY);
         tempY += 6;
@@ -795,28 +811,6 @@ export default class DCDownloadPage extends LightningElement {
 
             // Calculate column widths - Fixed widths for better control
             const printableWidth = pageWidth - margin * 2;
-            // const colWidths = [
-            //     8,   // Sr. No.
-            //     18,  // Sub Product No.
-            //     25,  // Product Name
-            //     8,   // Dia
-            //     10,  // Length
-            //     25,  // Description
-            //     15,  // Batch No
-            //     15,  // Sr. No
-            //     12,  // Mfg. Date
-            //     12,  // Exp. Date
-            //     9,   // HSN
-            //     8,   // Qty
-            //     15,  // Taxable value
-            //     12,  // CGST Rate
-            //     13,  // CGST Amt.
-            //     12,  // SGST Rate
-            //     13,  // SGST Amt.
-            //     12,  // IGST Rate
-            //     12,  // IGST Amt.
-            //     14   // Total Value
-            // ];
 
             const colWidths = [
                 8,   // Sr. No.
@@ -1117,11 +1111,409 @@ export default class DCDownloadPage extends LightningElement {
         const signatureWidth = footerRightWidth;
         const signatureHeight = footerHeight / 2;
 
+        // doc.setFont('helvetica', 'bold');
+        // doc.setFontSize(9);
+        // doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 8, { align: 'center' });
+        // doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
+        // doc.text('Authorised Signatory', signatureX + signatureWidth / 2, yPosition + signatureHeight + 8, { align: 'center' });
+
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
-        doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 8, { align: 'center' });
+
+        // Left signature - Receiver Signature
+        doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 18, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+        doc.text(`(${this.consigneeName})`, signatureX + signatureWidth / 2, yPosition + 23, { align: 'center' });
+
+        // Draw the signature line
         doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
-        doc.text('Authorised Signatory', signatureX + signatureWidth / 2, yPosition + signatureHeight + 8, { align: 'center' });
+
+        // Right signature - Authorised Signatory
+        doc.setFont('helvetica', 'bold'); // Back to bold for the label
+        doc.text('Authorised Signatory.', signatureX + signatureWidth / 2, yPosition + signatureHeight + 18, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+        doc.text(`(${this.consignorName})`, signatureX + signatureWidth / 2, yPosition + signatureHeight + 23, { align: 'center' });
+
+        if (!Array.isArray(this.deliveryChallanLineItems) || this.deliveryChallanLineItems.length === 0) {
+            doc.setFontSize(10);
+            doc.text('No line items available to display.', margin, yPosition + 5);
+            yPosition += 15;
+        }
+
+        else {
+            this.deliveryChallanLineItems.forEach((item, itemIndex) => {
+                if (itemIndex >= 0) {
+                    doc.addPage();
+                    yPosition = 20;
+
+                    // Add title for new page
+                    doc.setFontSize(14);
+                    doc.setTextColor(0, 0, 0);
+
+                    // const pageTitle = `Delivery Challan Line Item - ${item.suDCNumber || 'DCP' + (itemIndex + 1)}`;
+
+                    const pageTitle = this.RDCTitle
+                        ? `Return Note Line Item - ${item.suDCNumber || 'RNI' + (itemIndex + 1)}`
+                        : `Delivery Challan Line Item - ${item.suDCNumber || 'DCP' + (itemIndex + 1)}`;
+
+                    // Draw background rectangle
+                    doc.rect(margin, yPosition, pageWidth - margin * 2, 12);
+                    doc.setFillColor(249, 249, 249); // Light grey background
+                    doc.rect(margin, yPosition, pageWidth - margin * 2, 12, 'F');
+
+                    // Set font and draw centered text
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(pageTitle, pageWidth / 2, yPosition + 8, { align: 'center' });
+
+                    yPosition += 20;
+
+                    // Information Section Layout
+                    doc.setFontSize(10);
+                    const leftSectionWidth = (pageWidth - margin * 2) * (2 / 3);
+                    const rightSectionWidth = (pageWidth - margin * 2) * (1 / 3);
+
+                    // Top row - Consignor Bill From, Ship From, and Order Info
+                    const topBlockHeight = 55;
+                    let xPosition = margin;
+                    const topBlockWidth = leftSectionWidth / 2;
+
+                    // Consignor Bill From
+                    doc.rect(xPosition, yPosition, topBlockWidth, topBlockHeight);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Consignor Bill From :-', xPosition + 2, yPosition + 5);
+                    doc.setFont('helvetica', 'normal');
+                    let tempY = yPosition + 10;
+                    doc.text(this.consignorName || 'N/A', xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consignorAddress || ''},`, xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consignorCity || ''}, ${this.consignorState || ''} - ${this.consignorPinCode || ''}`, xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consignorState || ''} | INDIA`, xPosition + 2, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`GSTIN No. :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consignorGstNumber || ''}`, xPosition + 23, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`PAN :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consignorPanNumber || ''}`, xPosition + 15, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`DL No. :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consignorDLNumber || ''}`, xPosition + 18, tempY);
+
+                    // Consignor Ship From
+                    xPosition += topBlockWidth;
+                    doc.rect(xPosition, yPosition, topBlockWidth, topBlockHeight);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Consignor Ship From :-', xPosition + 2, yPosition + 5);
+                    doc.setFont('helvetica', 'normal');
+                    tempY = yPosition + 10;
+                    doc.text(this.consignorName || 'N/A', xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consignorShipAddress || ''},`, xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consignorShipCity || ''}, ${this.consignorShipState || ''} - ${this.consignorShipPinCode || ''}`, xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consignorShipState || ''} | INDIA`, xPosition + 2, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`GSTIN No. :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consignorGstNumber || ''}`, xPosition + 23, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`PAN :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consignorPanNumber || ''}`, xPosition + 15, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`DL No. :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consignorDLNumber || ''}`, xPosition + 18, tempY);
+
+                    // Right side - Order Info
+                    xPosition = margin + leftSectionWidth;
+                    doc.rect(xPosition, yPosition, rightSectionWidth, topBlockHeight);
+                    // doc.setFont('helvetica', 'bold');
+                    // tempY = yPosition + 6;
+                    // doc.text(`Delivery Challan No :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'bold');
+                    tempY = yPosition + 6;
+                    const challanLabel = this.RDCTitle ? 'Return Note No' : 'Delivery Challan No';
+                    doc.text(`${challanLabel} :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.deliveryChallanNumber || ''}`, xPosition + 40, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Delivery Challan Date :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.deliveryChallanDate || ''}`, xPosition + 45, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Eway Bill No & Date :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('To be imported!', xPosition + 38, tempY);
+                    tempY += 6;
+                    // doc.setFont('helvetica', 'bold');
+                    // doc.text(`Exporter Ref. :-`, xPosition + 2, tempY);
+                    // doc.setFont('helvetica', 'normal');
+                    // doc.text('N/A', xPosition + 30, tempY);
+                    // tempY += 6;
+                    // doc.setFont('helvetica', 'bold');
+                    // doc.text(`I. E. CODE NO. :-`, xPosition + 2, tempY);
+                    // doc.setFont('helvetica', 'normal');
+                    // doc.text('N/A', xPosition + 30, tempY);
+                    // tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Supply Order No :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.supplyOrderNumber || ''}`, xPosition + 35, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Supply Order Date :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.supplyOrderDate || ''}`, xPosition + 38, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Courier Name :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.courierName || ''}`, xPosition + 30, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Courier Docket No :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.courierDocketNumber || ''}`, xPosition + 35, tempY);
+                    tempY += 6;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`Comments :-`, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    const commentsLines = doc.splitTextToSize(`"Goods send on sale on approval basis" ${this.comment || ''}`, rightSectionWidth - 4);
+                    doc.text(commentsLines, xPosition + 2, tempY + 4);
+                    tempY += commentsLines.length * 3 + 5;
+
+                    yPosition += topBlockHeight;
+
+
+
+                    // Bottom row - Consignee sections
+                    const bottomBlockHeight = 26;
+                    xPosition = margin;
+
+                    // Consignee Bill To (First)
+                    doc.rect(xPosition, yPosition, topBlockWidth, bottomBlockHeight);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Consignee Bill To :-', xPosition + 2, yPosition + 5);
+                    doc.setFont('helvetica', 'normal');
+                    tempY = yPosition + 9;
+                    doc.text(this.consigneeName || 'N/A', xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(this.consigneeAddress || '', xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consigneeCity || ''}, ${this.consigneeState || ''} - ${this.consigneePinCode || ''}`, xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`GSTIN No. :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consigneeGstNumber || ''}`, xPosition + 23, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`PAN :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consigneePanNumber || ''}`, xPosition + 15, tempY);
+
+                    // Consignee Bill To (Second)
+                    xPosition += topBlockWidth;
+                    doc.rect(xPosition, yPosition, topBlockWidth, bottomBlockHeight);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Consignee Bill To :-', xPosition + 2, yPosition + 5);
+                    doc.setFont('helvetica', 'normal');
+                    tempY = yPosition + 9;
+                    doc.text(this.consigneeName || 'N/A', xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(this.consigneeAddress || '', xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.text(`${this.consigneeCity || ''}, ${this.consigneeState || ''} - ${this.consigneePinCode || ''}`, xPosition + 2, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`GSTIN No. :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consigneeGstNumber || ''}`, xPosition + 23, tempY);
+                    tempY += 4;
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(`PAN :- `, xPosition + 2, tempY);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`${this.consigneePanNumber || ''}`, xPosition + 15, tempY);
+
+                    yPosition += bottomBlockHeight + 10;
+
+                    const printableWidth = pageWidth - margin * 2;
+
+                    // Table headers
+                    const headers = [
+                        'Sr. No.', 'Sub DC No.', 'Product Name', 'Dia', 'Length', 'Description', 'Batch No', 'Sr. No',
+                        'Mfg. Date', 'Exp. Date', 'HSN', 'Taxable value', 'CGST Rate', 'CGST Amt.', 'SGST Rate',
+                        'SGST Amt.', 'IGST Rate', 'IGST Amt.', 'Total Value'
+                    ];
+
+                    const colWidths = [
+                        8, 20, 25, 8, 10, 27, 16, 16, 13, 13, 9, 15, 12, 13, 12, 13, 12, 12, 14
+                    ];
+
+                    const headerHeight = 15;
+                    const rowHeight = 15;
+
+                    // Draw header
+                    doc.setFillColor(240, 240, 240);
+                    doc.rect(margin, yPosition, printableWidth, headerHeight, 'F');
+                    doc.rect(margin, yPosition, printableWidth, headerHeight);
+
+                    let currentX = margin;
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(6);
+
+                    headers.forEach((header, index) => {
+                        const maxWidth = colWidths[index] - 2;
+                        const splitHeader = doc.splitTextToSize(header, maxWidth);
+                        const textY = yPosition + headerHeight / 2;
+
+                        if (splitHeader.length === 1) {
+                            doc.text(splitHeader[0], currentX + colWidths[index] / 2, textY, { align: 'center' });
+                        } else {
+                            const lineHeight = 2.5;
+                            const startY = textY - (splitHeader.length - 1) * lineHeight / 2;
+                            splitHeader.forEach((line, lineIndex) => {
+                                doc.text(line, currentX + colWidths[index] / 2, startY + lineIndex * lineHeight, { align: 'center' });
+                            });
+                        }
+
+                        if (index > 0) {
+                            doc.line(currentX, yPosition, currentX, yPosition + headerHeight);
+                        }
+                        currentX += colWidths[index];
+                    });
+
+                    yPosition += headerHeight;
+
+                    // Draw single row for this item
+                    const rowData = [
+                        (itemIndex + 1).toString(),
+                        item.suDCNumber || '',
+                        item.productName || '',
+                        item.dia || '',
+                        item.length || '',
+                        item.description || '',
+                        item.batchNumber || '',
+                        item.serialNumber || '',
+                        item.mfgDate || '',
+                        item.expiryDate || '',
+                        item.hsn || '',
+                        item.taxableValue?.toString() || '0.00',
+                        (item.CGSTRate || '0.00') + '%',
+                        item.CGSTAmount || '0.00',
+                        (item.SGSTRate || '0.00') + '%',
+                        item.SGSTAmount || '0.00',
+                        (item.IGSTRate || '0.00') + '%',
+                        item.IGSTAmount || '0.00',
+                        item.totalValue?.toString() || '0.00'
+                    ];
+
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(margin, yPosition, printableWidth, rowHeight, 'F');
+                    doc.rect(margin, yPosition, printableWidth, rowHeight);
+
+                    currentX = margin;
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(6);
+
+                    rowData.forEach((data, colIndex) => {
+                        const maxWidth = colWidths[colIndex] - 2;
+                        const splitText = doc.splitTextToSize(data.toString(), maxWidth);
+                        const textY = yPosition + rowHeight / 2;
+
+                        if (splitText.length === 1) {
+                            doc.text(splitText[0], currentX + colWidths[colIndex] / 2, textY, { align: 'center' });
+                        } else {
+                            const displayText = splitText[0].length > maxWidth ? splitText[0].substring(0, maxWidth - 3) + '...' : splitText[0];
+                            doc.text(displayText, currentX + colWidths[colIndex] / 2, textY, { align: 'center' });
+                        }
+
+                        if (colIndex > 0) {
+                            doc.line(currentX, yPosition, currentX, yPosition + rowHeight);
+                        }
+                        currentX += colWidths[colIndex];
+                    });
+
+                    yPosition += rowHeight + 20;
+
+                    // Footer Section
+                    if (yPosition > pageHeight - 60) {
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+
+                    const footerHeight = 50;
+                    const footerWidth = pageWidth - margin * 2;
+                    const footerLeftWidth = footerWidth * 0.75;
+                    const footerRightWidth = footerWidth * 0.25;
+
+                    doc.rect(margin, yPosition, footerWidth, footerHeight);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(9);
+
+                    let termsY = yPosition + 4;
+                    const terms = [
+                        { text: 'For Reference No. please refer Product Catalogue.', bold: true },
+                        { text: 'It will be sole responsibility of the Consignee to monitor non use of expired product.', bold: false },
+                        { text: 'Subject to Ahmedabad Jurisdiction.', bold: true },
+                        { text: 'Goods once sold are not returnable.', bold: true },
+                        { text: 'Our risk and responsibility cease once the goods leave our premises.', bold: false },
+                        { text: 'Claim for any loss in the consignment should be settled by the buyer directly with the carrier.', bold: false },
+                        { text: 'Declaration :', bold: true },
+                        { text: 'We declare that this invoice shows that actual price of the goods described and that all particulars are true and correct', bold: false }
+                    ];
+
+                    terms.forEach((term) => {
+                        doc.setFont('helvetica', term.bold ? 'bold' : 'normal');
+                        const splitText = doc.splitTextToSize(term.text, footerLeftWidth - 4);
+                        doc.text(splitText, margin + 2, termsY);
+                        termsY += splitText.length * 3.5;
+                    });
+
+                    doc.line(margin + footerLeftWidth, yPosition, margin + footerLeftWidth, yPosition + footerHeight);
+                    const signatureX = margin + footerLeftWidth;
+                    const signatureWidth = footerRightWidth;
+                    const signatureHeight = footerHeight / 2;
+
+                    // doc.setFont('helvetica', 'bold');
+                    // doc.setFontSize(9);
+                    // doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 8, { align: 'center' });
+                    // doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
+                    // doc.text('Authorised Signatory', signatureX + signatureWidth / 2, yPosition + signatureHeight + 8, { align: 'center' });
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(9);
+
+                    // Left signature - Receiver Signature
+                    doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 18, { align: 'center' });
+                    doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+                    doc.text(`(${this.consigneeName})`, signatureX + signatureWidth / 2, yPosition + 23, { align: 'center' });
+
+                    // Draw the signature line
+                    doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
+
+                    // Right signature - Authorised Signatory
+                    doc.setFont('helvetica', 'bold'); // Back to bold for the label
+                    doc.text('Authorised Signatory.', signatureX + signatureWidth / 2, yPosition + signatureHeight + 18, { align: 'center' });
+                    doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+                    doc.text(`(${this.consignorName})`, signatureX + signatureWidth / 2, yPosition + signatureHeight + 23, { align: 'center' });
+                }
+            })
+        }
 
         const fileName = `Delivery_Challan_${this.deliveryChallanNumber || 'Document'}.pdf`;
         doc.save(fileName);

@@ -1,0 +1,119 @@
+<template>
+    <lightning-card title="Product History Tracker" icon-name="standard:product_transfer">
+        <div class="slds-p-around_medium">
+            <div class="slds-grid slds-gutters slds-m-bottom_medium">
+                <div class="slds-col slds-size_2-of-4">
+                    <lightning-input class="search-input" type="search" label="Enter Serial Number/Material Code"
+                        value={searchQuery} placeholder="Search by Serial Number/Material Code..."
+                        onchange={handleInputChange} onkeyup={handleKeyUp}>
+                    </lightning-input>
+
+                    <template if:true={showSuggestions}>
+                        <div class="slds-box slds-box_border suggestions">
+                            <ul class="slds-listbox slds-listbox_vertical">
+                                <template for:each={suggestions} for:item="item">
+                                    <li key={item} role="presentation" class="slds-listbox__item" data-code={item}
+                                        onclick={handleSuggestionClick}>
+                                        <div class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_small"
+                                            role="option">
+                                            <span class="slds-media__body">
+                                                <span class="slds-truncate" title={item}>{item}</span>
+                                            </span>
+                                        </div>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <template if:true={isLoading}>
+                <div class="slds-align_absolute-center slds-m-top_large">
+                    <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                </div>
+            </template>
+
+            <template if:true={noResults}>
+                <div class="slds-align_absolute-center slds-m-top_large slds-text-color_weak">
+                    No history found for "{searchQuery}"
+                </div>
+            </template>
+
+            <template if:true={historyRecords.length}>
+                <div class="slds-m-top_large">
+                    <h2 class="slds-m-bottom_medium">
+                        Product Journey for: <strong>{searchQuery}</strong>
+                    </h2>
+
+                    <ul class="timeline">
+                        <template for:each={historyRecords} for:item="group">
+                            <li key={group.id} class="timeline-item">
+                                <div class="timeline-marker">
+                                    <template if:true={group.isCurrentWarehouse}>
+                                        <lightning-icon icon-name="utility:location" size="small"
+                                            class="timeline-icon-current slds-icon_container"></lightning-icon>
+                                    </template>
+                                    <template if:false={group.isCurrentWarehouse}>
+                                        <lightning-icon icon-name="utility:check" size="x-small"
+                                            class="timeline-icon-completed slds-icon_container"></lightning-icon>
+                                    </template>
+                                </div>
+
+                                <div class="timeline-content slds-box" style={group.borderStyle}>
+                                    <p class="slds-text-heading_small">{group.name}</p>
+
+                                    <ul class="slds-list_dotted slds-m-top_small">
+                                        <template for:each={group.events} for:item="record">
+                                            <li key={record.id} class="slds-p-vertical_x-small">
+
+                                                <template if:true={record.isCreationEvent}>
+                                                    <p class="slds-text-body_small">
+                                                        Record added with status: <lightning-badge
+                                                            label={record.newValue}
+                                                            style={record.badgeStyle}></lightning-badge>
+                                                    </p>
+                                                </template>
+
+                                                <template if:false={record.isCreationEvent}>
+                                                    <p class="slds-text-body_small">
+                                                        Status changed from <strong>{record.oldValue}</strong> to &nbsp;
+                                                        <lightning-badge label={record.newValue}
+                                                            style={record.badgeStyle}></lightning-badge>
+                                                    </p>
+                                                </template>
+                                                <p
+                                                    class="slds-text-body_small slds-m-top_xx-small slds-text-color_weak">
+                                                    By: <i>{record.userName}</i> on&nbsp;
+                                                    <lightning-formatted-date-time value={record.timestamp}
+                                                        year="numeric" month="short" day="2-digit" hour="2-digit"
+                                                        minute="2-digit" second="2-digit">
+                                                    </lightning-formatted-date-time>
+                                                </p>
+
+                                                <template if:false={group.shouldShow}>
+                                                    <div
+                                                        class="slds-text-body_small slds-m-top_xx-small slds-text-color_weak">
+                                                        <template if:true={group.poName}>
+                                                            <p><span style="font-weight: 700;">PO: </span> <i>{group.poName}</i></p>
+                                                        </template>
+                                                        <template if:true={group.soName}>
+                                                            <p><span style="font-weight: 700;">SO: </span> <i>{group.soName}</i></p>
+                                                        </template>
+                                                        <template if:true={group.dcName}>
+                                                            <p><span style="font-weight: 700;">DC: </span> <i>{group.dcName}</i></p>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

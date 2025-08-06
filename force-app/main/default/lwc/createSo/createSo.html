@@ -1,67 +1,320 @@
 <template>
     <lightning-card title="Create Supply Order">
         <div class="table-scroll-wrapper slds-m-around_medium" style="overflow-x: auto;">
-            <table class="slds-table slds-table_bordered slds-table_cell-buffer" style="min-width: 1000px;">
-                <thead>
-                    <tr class="slds-line-height_reset">
-                        <th></th>
-                        <th>Product</th>
-                        <th>HSN Code</th>
-                        <th>Unit Price</th>
-                        <th>Requested Qty</th>
-                        <th>Pending Qty</th>
-                        <th>Available Qty</th>
-                        <th>Warehouse</th>
-                        <th>CGST</th>
-                        <th>SGST</th>
-                        <th>IGST</th>
-                        <th>Net Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template for:each={lineItems} for:item="item">
-                        <tr key={item.lineItemId}>
-                            <td>
-                                <lightning-input
-                                    type="checkbox"
-                                    data-id={item.lineItemId}
-                                    checked={item.isSelected}
-                                    onchange={handleCheckboxChange}>
-                                </lightning-input>
-                            </td>
-                            <td>{item.productName}</td>
-                            <td>{item.hsnCode}</td> 
-                            <td>{item.UnitPriceFormatted}</td>
-                            <td>{item.requestedQty}</td>
-                            <td>{item.pendingQty}</td>
-                            <td>{item.AvailableQty}</td>
-                            <td>
-                                <lightning-combobox
-                                    name="warehouse"
-                                    data-id={item.lineItemId}
-                                    value={item.SelectedWarehouse}
-                                    options={item.warehouseOptions}
-                                    onchange={handleWarehouseChange}>
-                                </lightning-combobox>
-                            </td>
-                            <td>{item.CGSTAmountFormatted}</td>
-                            <td>{item.SGSTAmountFormatted}</td>
-                            <td>{item.IGSTAmountFormatted}</td>
-                            <td>{item.NetAmountFormatted}</td>
-                        </tr>
+
+            <div class="slds-grid slds-align_absolute-center slds-m-bottom_medium">
+                <lightning-radio-group options={radioOptions} value={selectedOption} onchange={handleRadioChange}
+                    type="button" variant="container">
+                </lightning-radio-group>
+            </div>
+
+            <template if:true={isFifoBased}>
+                <table class="slds-table slds-table_bordered slds-table_cell-buffer">
+                    <template if:true={isLoading}>
+                        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
                     </template>
-                </tbody>
-            </table>
+                    <thead>
+                        <tr>
+                            <th>
+                                <lightning-input type="checkbox" onchange={handleSelectAllCheckbox}
+                                    checked={isAllSelected}></lightning-input>
+                            </th>
+                            <th>Product</th>
+                            <th>HSN Code</th>
+                            <th>MRP</th>
+                            <th>Requested Qty</th>
+                            <th>Pending Qty</th>
+                            <th>Available Qty</th>
+                            <th>Warehouse</th>
+                            <th>CGST</th>
+                            <th>SGST</th>
+                            <th>IGST</th>
+                            <th>Net Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={lineItems} for:item="item">
+                            <tr key={item.lineItemId}>
+                                <td>
+                                    <lightning-input type="checkbox" data-id={item.lineItemId} checked={item.isSelected}
+                                        onchange={handleCheckboxChange}>
+                                    </lightning-input>
+                                </td>
+                                <td>{item.productName}</td>
+                                <td>{item.hsnCode}</td>
+                                <td>{item.MRPFormatted}</td>
+                                <td>{item.requestedQty}</td>
+                                <td>{item.pendingQty}</td>
+                                <td>{item.AvailableQty}</td>
+                                <td>
+                                    <lightning-combobox name="warehouse" data-id={item.lineItemId}
+                                        value={item.SelectedWarehouse} options={item.warehouseOptions}
+                                        onchange={handleWarehouseChange}>
+                                    </lightning-combobox>
+                                </td>
+                                <td>{item.CGSTAmountFormatted}</td>
+                                <td>{item.SGSTAmountFormatted}</td>
+                                <td>{item.IGSTAmountFormatted}</td>
+                                <td>{item.NetAmountFormatted}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </template>
+
+            <template if:true={isBarcodeScanning}>
+
+                <div class="slds-m-left_medium">
+                    <lightning-input type="toggle" ame="bulkScanToggle" value={bulkSerialInput}
+                        checked={isBulkScanEnabled} onchange={handleBulkScanToggle} message-toggle-active="Bulk Scan"
+                        message-toggle-inactive="Product Wise Scan">
+                    </lightning-input>
+                </div>
+                <template if:false={isBulkScanEnabled}>
+                    <div class="slds-p-around_medium">
+                        <table class="slds-table slds-table_bordered slds-table_cell-buffer" style="min-width: 1200px;">
+                            <template if:true={isLoading}>
+                                <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                            </template>
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <lightning-input type="checkbox" onchange={handleSelectAllCheckboxScan}
+                                            checked={isAllSelectedScan}>
+                                        </lightning-input>
+                                    </th>
+                                    <th class="slds-text-align_center">
+                                        <div class="slds-align_absolute-center">
+                                            <lightning-icon icon-name="utility:scan" size="small"></lightning-icon>
+                                        </div>
+                                    </th>
+                                    <th>Product</th>
+                                    <th>HSN Code</th>
+                                    <th>MRP</th>
+                                    <th>Requested Qty</th>
+                                    <th>Pending Qty</th>
+                                    <th>Scanned Qty</th>
+                                    <th>Available Qty</th>
+                                    <th>CGST</th>
+                                    <th>SGST</th>
+                                    <th>IGST</th>
+                                    <th>Net Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={lineItems} for:item="item" for:index="idx">
+                                    <tr key={item.lineItemId}>
+                                        <td>
+                                            <lightning-input type="checkbox" data-lineitemid={item.lineItemId}
+                                                checked={item.isSelectedScan} onchange={handleCheckboxChangeScan}>
+                                            </lightning-input>
+                                        </td>
+                                        <td style="position: relative;">
+                                            <lightning-input class="serial-input"
+                                                placeholder="Click or type to search..." data-idx={idx} value={scannedSerialNumber}
+                                                data-productid={item.productId} onfocus={handleFocus}
+                                                onblur={handleBlur} onchange={handleInput}>
+                                            </lightning-input>
+
+                                            <template if:true={item.isActive}>
+                                                <div class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid custom-dropdown"
+                                                    role="listbox">
+                                                    <ul class="slds-listbox slds-listbox_vertical" role="presentation">
+                                                        <template for:each={SerialNumbersToDisplay} for:item="result">
+                                                            <li key={result} role="presentation"
+                                                                class="slds-listbox__item" 
+                                                                onclick={handleSNClick}
+                                                                data-id={result}
+                                                                data-productid={item.productId}
+                                                                data-pendingqty={item.pendingQty}
+                                                                data-productname={item.productName}
+                                                                >
+                                                                <div class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center"
+                                                                    role="option">
+                                                                    <span class="slds-media__body">
+                                                                        <span class="slds-truncate" title={result}>
+                                                                            {result}
+                                                                        </span>
+                                                                    </span>
+                                                                </div>
+                                                            </li>
+                                                        </template>
+                                                    </ul>
+                                                </div>
+                                            </template>
+                                        </td>
+
+                                        <td>{item.productName}</td>
+                                        <td>{item.hsnCode}</td>
+                                        <td>{item.MRPFormatted}</td>
+                                        <td>{item.requestedQty}</td>
+                                        <td>{item.pendingQty}</td>
+                                        <td>{item.scannedQty}</td>
+                                        <td>{item.AvailableQty}</td>
+                                        <td>{item.CGSTAmountFormatted}</td>
+                                        <td>{item.SGSTAmountFormatted}</td>
+                                        <td>{item.IGSTAmountFormatted}</td>
+                                        <td>{item.NetAmountFormatted}</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+                <template if:true={isBulkScanEnabled}>
+                    <div class="slds-form-element slds-grid slds-gutters slds-m-left_medium">
+                        <div class="slds-form-element__control slds-col slds-size_1-of-2 slds-p-around_small"
+                            style="position: relative;">
+                            <input type="text" class="slds-input" value={bulkSerialInput} data-id="inputFieldScan"
+                                placeholder={bulkScanPlaceholder} oninput={handleBulkSerialChange} />
+
+                            <div
+                                style="position: absolute; top: 50%; right: 1.25rem; transform: translateY(-50%); pointer-events: none;">
+                                <lightning-icon icon-name="utility:scan" size="small"
+                                    alternative-text="Scan"></lightning-icon>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="slds-p-around_medium">
+                        <table class="slds-table slds-table_bordered slds-table_cell-buffer" style="min-width: 1200px;">
+                            <template if:true={isLoading}>
+                                <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                            </template>
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>HSN Code</th>
+                                    <th>MRP</th>
+                                    <th>Requested Qty</th>
+                                    <th>Pending Qty</th>
+                                    <th>Scanned Qty</th>
+                                    <th>Available Qty</th>
+                                    <th>CGST</th>
+                                    <th>SGST</th>
+                                    <th>IGST</th>
+                                    <th>Net Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={lineItems} for:item="item" for:index="idx">
+                                    <tr key={item.lineItemId}>
+                                        <td>{item.productName}</td>
+                                        <td>{item.hsnCode}</td>
+                                        <td>{item.MRPFormatted}</td>
+                                        <td>{item.requestedQty}</td>
+                                        <td>{item.pendingQty}</td>
+                                        <td>{item.scannedQty}</td>
+                                        <td>{item.AvailableQty}</td>
+                                        <td>{item.CGSTAmountFormatted}</td>
+                                        <td>{item.SGSTAmountFormatted}</td>
+                                        <td>{item.IGSTAmountFormatted}</td>
+                                        <td>{item.NetAmountFormatted}</td>
+
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+
+                <template if:true={isListEmpty}>
+                    <div class="slds-m-around_medium slds-text-align_center">
+                        <div class="slds-illustration slds-illustration_small" style="width: 150px; margin: 0 auto;">
+                            <img src="/_slds/images/illustrations/empty-state-tasks.svg" alt="No items scanned" />
+                        </div>
+                        <h3 class="slds-text-heading_small slds-m-top_small">No Items Scanned</h3>
+                        <p class="slds-text-color_weak">Scan a product serial to begin.</p>
+                    </div>
+                </template>
+
+                <template if:true={hasScannedItems}>
+                    <template for:each={scannedByProduct} for:item="productGroup">
+
+                        <div key={productGroup.Id} class="slds-m-top_medium slds-m-bottom_medium">
+                            <h2
+                                class="slds-text-heading_small slds-m-bottom_small slds-m-left_medium slds-text-color_default">
+                                Product: <strong class="slds-text-color_brand">{productGroup.productName}</strong>
+                                ({productGroup.count} scanned /
+                                {productGroup.pendingQty})
+                            </h2>
+
+                            <table class="slds-table slds-table_bordered slds-table_cell-buffer"
+                                style="min-width: 1200px;">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="slds-text-align_center">#</th>
+                                        <th scope="col" class="slds-text-align_center">Serial Number</th>
+                                        <th scope="col" class="slds-text-align_center">Warehouse</th>
+                                        <th scope="col" class="slds-text-align_center">Batch</th>
+                                        <th scope="col" class="slds-text-align_center">Status</th>
+                                        <th scope="col" class="slds-text-align_center">Condition</th>
+                                        <th scope="col" class="slds-text-align_center">Expiry</th>
+                                        <th scope="col" class="slds-text-align_center">Manufactured</th>
+                                        <th scope="col" class="slds-text-align_center">Price</th>
+                                        <th scope="col" class="slds-text-align_center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={productGroup.items} for:item="item">
+                                        <tr key={item.Id}>
+                                            <td class="slds-text-align_center">
+                                                <lightning-icon icon-name="utility:circle" size="x-small"
+                                                    title="Scanned Successfully" variant="success"
+                                                    alternative-text="Scanned Successfully"
+                                                    class="slds-icon-text-success">
+                                                </lightning-icon>
+                                            </td>
+                                            <td class="slds-text-align_center">{item.Serial_Number__c}</td>
+                                            <td class="slds-text-align_center">{item.warehouse}</td>
+                                            <td class="slds-text-align_center">{item.Batch_Number__c}</td>
+                                            <td class="slds-text-align_center">{item.Status__c}</td>
+                                            <td class="slds-text-align_center">{item.Condition__c}</td>
+                                            <td class="slds-text-align_center">
+                                                <lightning-formatted-date-time
+                                                    value={item.Expiry_Date__c}></lightning-formatted-date-time>
+                                            </td>
+                                            <td class="slds-text-align_center">
+                                                <lightning-formatted-date-time
+                                                    value={item.Manufactured_Date__c}></lightning-formatted-date-time>
+                                            </td>
+                                            <td class="slds-text-align_center">
+                                                <lightning-formatted-number format-style="currency" currency-code="INR"
+                                                    value={item.Unit_Price__c}></lightning-formatted-number>
+                                            </td>
+                                            <td class="slds-text-align_center">
+                                                <lightning-button-icon icon-name="utility:delete"
+                                                    alternative-text="Remove" title="Remove" data-id={item.Id}
+                                                    onclick={handleRemoveSerial}>
+                                                </lightning-button-icon>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </template>
+                </template>
+            </template>
+
         </div>
 
-        <!-- Centered button at the bottom -->
-        <div class="slds-align_absolute-center slds-m-around_medium">
-            <lightning-button
-                variant="brand"
-                label="Create Supply Order"
-                onclick={handleCreateSO}
-                disabled={isCreateDisabled}>
-            </lightning-button>
-        </div>
+        <template if:true={isFifoBased}>
+            <div slot="footer" class="slds-align_absolute-center slds-m-around_medium">
+                <lightning-button variant="brand" label={createSOLable} onclick={handleCreateSO}
+                    disabled={isCreateDisabled}>
+                </lightning-button>
+            </div>
+        </template>
+
+        <template if:true={isBarcodeScanning}>
+            <div slot="footer" class="slds-align_absolute-center slds-m-around_medium">
+                <lightning-button variant="brand-outline" label={createSOLableScan} onclick={handleCreateSOScan}
+                    disabled={isCreateSOBtnDisabledScan}>
+                </lightning-button>
+            </div>
+        </template>
     </lightning-card>
 </template>
