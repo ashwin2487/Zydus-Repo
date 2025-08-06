@@ -113,7 +113,7 @@ public class FirstOrderCreationQueueHospital implements Queueable {
         }
         
         List<Zydus_Price_Book_Entry__c> pbes = [
-            SELECT Id, Zydus_Product__c, List_Price__c, Bill_Discount_Amount__c, Unit_Price__c,
+            SELECT Id, Zydus_Product__c, Zydus_Product__r.MRP__c, Bill_Discount_Amount__c, Unit_Price__c,
             Minimum_Order_Quantity_MOQ__c, Credit_Note_Amount__c, Zydus_Price_Book__c,
             Is_Active__c
             FROM Zydus_Price_Book_Entry__c
@@ -153,8 +153,9 @@ public class FirstOrderCreationQueueHospital implements Queueable {
         }
         
         List<Purchase_Order_Product__c> popToInsert = new List<Purchase_Order_Product__c>();
-        
+        List<Id> listPOIds=new List<Id>();
         for (Purchase_Order__c po : poToInsert) {
+            listPOIds.add(po.Id);
             List<Zydus_Price_Book_Entry__c> entries = new List<Zydus_Price_Book_Entry__c>();
             for (Zydus_Price_Book_Entry__c pbe : pbes) {
                 if (pbe.Zydus_Price_Book__c == po.Zydus_Price_Book__c) {
@@ -194,7 +195,7 @@ public class FirstOrderCreationQueueHospital implements Queueable {
                 pop.Zydus_Product__c = pbe.Zydus_Product__c;
                 pop.Quantity__c = qty;
                 pop.UnitPrice__c = pbe.Unit_Price__c;
-                pop.List_Price__c = pbe.List_Price__c;
+                pop.List_Price__c = pbe.Zydus_Product__r.MRP__c;
                 pop.SO_Status__c = 'SO Pending';
                 pop.Pending_Quantity__c = qty;
                 pop.Zydus_Price_Book_Entry__c = pbe.Id;
@@ -205,6 +206,53 @@ public class FirstOrderCreationQueueHospital implements Queueable {
                 pop.HSN_Code__c = hsnId;
                 popToInsert.add(pop);
             }
+        }
+       
+        List<Purchase_Order__c> purchaseOrders = [
+            SELECT Id, Name, 
+            Account__r.Business_Owner__c, 
+            Account__r.Business_Owner__r.Name, 
+            Account__r.Business_Owner__r.Email,
+            Hospital__r.Contact_Email__c,
+            Hospital__r.CC_Email_Address__c
+            FROM Purchase_Order__c 
+            WHERE Id IN :listPOIds
+        ];
+        
+        Set<String> userIdsToNotify = new Set<String>();
+        List<String> emailsToSend = new List<String>();
+        
+        String subject = 'New Purchase Order: ' + purchaseOrders[0].Name;
+        String body = 'Dear User,\n\n' +
+            'We are pleased to inform you that a new Purchase Order (' + purchaseOrders[0].Name +
+            ') has been successfully created in the Zydus DMS.\n\n' +
+            'You may review the Purchase Order details at your convenience.\n\n' +
+            'Best regards,\n' +
+            'Zydus DMS Team'; 
+        
+        for (Purchase_Order__c po : purchaseOrders) {
+            if(po.Account__r!=null && po.Account__r.Business_Owner__c!=null){
+                userIdsToNotify.add(po.Account__r.Business_Owner__c);
+            }
+            
+            if(po.Account__r!=null && po.Account__r.Business_Owner__r!=null && po.Account__r.Business_Owner__r.Email!=null){
+                emailsToSend.add(po.Account__r.Business_Owner__r.Email);
+            }
+            
+            if(po.Hospital__r!=null && po.Hospital__r.Contact_Email__c !=null){
+                emailsToSend.add(po.Hospital__r.Contact_Email__c);
+            }
+            
+            if(po.Hospital__r!=null && po.Hospital__r.CC_Email_Address__c !=null){
+                emailsToSend.add(po.Hospital__r.CC_Email_Address__c);
+            }
+        }
+        
+        if(!userIdsToNotify.isEmpty()){
+            NotificationService.notifyUsers(userIdsToNotify, purchaseOrders[0].Id, subject, body);                
+        }
+        if (!emailsToSend.isEmpty()) {
+            NotificationService.sendEmail(emailsToSend, subject, body);
         }
         
         if (!popToInsert.isEmpty()) {

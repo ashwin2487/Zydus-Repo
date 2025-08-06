@@ -1,0 +1,79 @@
+<template>
+    <lightning-card title="Collection Creation" icon-name="standard:email">
+        <div class="slds-p-horizontal_medium slds-p-top_medium">
+
+            <lightning-radio-group options={invoiceCreationOptions} label="Select collection create on"
+                value={selectedInvoiceCreationType} type="button" variant="container" onchange={handleInvoiceCreationTypeChange}
+                class="slds-m-bottom_medium">
+            </lightning-radio-group>
+
+            <div class="slds-box slds-theme_default slds-p-around_medium slds-m-bottom_medium slds-shadow_small">
+                <template if:true={isHospitalMode}>
+                    <h3 class="slds-text-heading_small slds-m-bottom_small slds-text-title_caps slds-text-title_bold">
+                    </h3>
+                    <div class="slds-grid slds-wrap slds-gutters_large slds-grid_vertical-align-center">
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-combobox label="Select Hospital" name="hospital" value={selectedHospitalId}
+                                options={hospitalOptions} onchange={handleHospitalChange} required>
+                            </lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-combobox label="Payment Mode" name="paymentMode" value={paymentMode}
+                                options={paymentModeOptions} onchange={handlePaymentModeChange} required>
+                            </lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-input type="currency" label="Collected Amount" value={collectedAmount}
+                                onchange={handleChangeAmount} disabled={isModeSelected} required>
+                            </lightning-input>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-input type="text" label="Remark" value={remark} onchange={handleChangeRemark}>
+                            </lightning-input>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- CHANNEL PARTNER MODE -->
+                <template if:true={isChannelPartnerMode}>
+                    <h3 class="slds-text-heading_small slds-m-bottom_small slds-text-title_caps slds-text-title_bold">
+                        Channel Partner Collection Details
+                    </h3>
+                    <div class="slds-grid slds-wrap slds-gutters_large slds-grid_vertical-align-center">
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-combobox label="Select Channel Partner" name="channelPartner"
+                                value={selectedChannelPartner} options={accountOptions}
+                                onchange={handleChannelPartnerSelect} required>
+                            </lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-combobox label="Payment Mode" name="paymentMode" value={paymentMode}
+                                options={paymentModeOptions} onchange={handlePaymentModeChange} required>
+                            </lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-input type="currency" label="Collected Amount" value={collectedAmount}
+                                onchange={handleChangeAmount} disabled={isModeSelected} required>
+                            </lightning-input>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4 slds-form-element_stacked">
+                            <lightning-input type="text" label="Remark" value={remark} onchange={handleChangeRemark}>
+                            </lightning-input>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class=" slds-docked-form-footer slds-align_absolute-center slds-m-top_medium">
+                <lightning-button variant="brand" 
+                                label="Create Collection" 
+                                class="slds-m-left_x-small"
+                                onclick={handleSave} 
+                                disabled={isCollectedAmountCheck}>
+                </lightning-button>
+            </div>
+
+
+        </div>
+    </lightning-card>
+</template>

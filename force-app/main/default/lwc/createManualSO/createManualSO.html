@@ -1,5 +1,5 @@
 <template>
-    <lightning-card title="Create Sales Order" icon-name="standard:orders">
+    <lightning-card title="Create Sales Order" icon-name="standard:orders" style="height: 100vh;">
         <template if:true={isLoading}>
             <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
         </template>
@@ -36,30 +36,48 @@
                 </div>
             </template>
 
-
-
-            <!-- Product Table -->
             <template if:true={showWarehouseLineItemTable}>
                 <div class="slds-p-bottom_medium slds-p-top_medium">Available Products</div>
-                <div style="max-height: 350px; overflow: auto;">
+
+                <div class="slds-is-relative" style="max-height: 400px; overflow: auto; min-height: 150px;">
+
+                    <div class="slds-form-element slds-grid slds-gutters">
+                        <div class="slds-form-element__control slds-col slds-size_1-of-4 slds-p-around_small"
+                            style="position: relative;">
+                            <input type="text" class="slds-input" value={bulkSerialInput} data-id="inputFieldScan"
+                                placeholder={bulkScanPlaceholder} oninput={handleBulkSerialChange} />
+
+                            <div
+                                style="position: absolute; top: 50%; right: 1.25rem; transform: translateY(-50%); pointer-events: none;">
+                                <lightning-icon icon-name="utility:scan" size="small"
+                                    alternative-text="Scan"></lightning-icon>
+                            </div>
+                        </div>
+                    </div>
+
                     <lightning-datatable key-field="Id" data={sortedData} columns={columns} onsort={handleSort}
                         sorted-by={sortBy} sorted-direction={sortDirection} onrowselection={handleRowSelection}>
                     </lightning-datatable>
+
                     <template if:false={sortedData.length}>
-                        <p class="slds-align_absolute-center slds-text-heading_small slds-p-around_medium">No products available.</p>
+                        <p class="slds-align_absolute-center slds-text-heading_small slds-p-around_medium">
+                            No products available.
+                        </p>
+                    </template>
+
+                    <template if:true={isLoadingProducts}>
+                        <lightning-spinner alternative-text="Loading Products" size="medium"></lightning-spinner>
                     </template>
                 </div>
             </template>
 
-            <div class="slds-grid slds-gutters slds-m-top_large">
-                <div class="slds-col slds-align-bottom">
-                    <lightning-button variant="neutral" label="Add Product" icon-name="utility:add"
-                        onclick={handleAddProduct} class="slds-m-right_small" disabled={disableAddProductBtn}>
-                    </lightning-button>
-                    <lightning-button variant="brand" label="Create Manual Sales Order" onclick={handleCreateManualSO}
-                        disabled={disableCreateSOBtn}>
-                    </lightning-button>
-                </div>
+            <div class="slds-docked-form-footer slds-align_absolute-center slds-p-vertical_medium">
+                <lightning-button variant="neutral" label="Add Product" icon-name="utility:add"
+                    onclick={handleAddProduct} class="slds-m-right_small" disabled={disableAddProductBtn}>
+                </lightning-button>
+                <lightning-button variant="brand" label={manualSOLable} onclick={handleCreateManualSO}
+                    disabled={disableCreateSOBtnGetter}>
+                </lightning-button>
             </div>
         </div>
     </lightning-card>

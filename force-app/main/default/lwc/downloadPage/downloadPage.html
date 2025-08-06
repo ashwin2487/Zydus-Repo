@@ -50,7 +50,7 @@
                         <div><strong>PAN :-</strong> {consigneePanNumber}</div>
                     </div>
                     <div class="info-block" style="flex: 1; border-top: none; border-right: none;">
-                        <div class="info-title">Consignee Bill To :-</div>
+                        <div class="info-title">Consignee Ship To :-</div>
                         <div>{consigneeName}</div>
                         <div>{consigneeAddress}</div>
                         <div>{consigneeCity}, {consigneeState} - {consigneePinCode}</div>
@@ -178,11 +178,19 @@
                 </div>
                 <div class="footer-right">
                     <div class="signature-section">
-                        <div><strong>Receiver Signature</strong></div>
                         <div style="height: 40px;"></div>
+                        <div>
+                            <strong>Receiver Signature</strong>
+                            <div>({consigneeName})</div>
+                        </div>
+                        
                     </div>
                     <div class="signature-section">
-                        <div><strong>Authorised Signatory.</strong></div>
+                        <div style="height: 40px;"></div>
+                        <div>
+                            <strong>Authorised Signatory.</strong>
+                            <div>({consignorName})</div>
+                        </div>
                     </div>
                 </div>
             </div>

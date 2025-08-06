@@ -5,9 +5,7 @@ public class HospitalTriggerHandler {
         List<Hospital__c> hospitalsToProcess = new List<Hospital__c>();
         Map<String, Id> recordTypeMap = new Map<String, Id>();
         
-        for (RecordType rt : [
-            SELECT Id, Name FROM RecordType WHERE SObjectType = 'Contact'
-        ]) {
+        for (RecordType rt : [SELECT Id, Name FROM RecordType WHERE SObjectType = 'Contact']) {
             recordTypeMap.put(rt.Name, rt.Id);
         }
         
@@ -54,7 +52,8 @@ public class HospitalTriggerHandler {
                     City__c          = hosp.Ship_City__c,
                     Country__c       = 'India',
                     ZipCode__c       = hosp.Ship_Pin__c,
-                    RecordTypeid     = hospitalWarehouseRecordTypeId
+                    RecordTypeid     = hospitalWarehouseRecordTypeId, 
+                    OwnerId			 = hosp.OwnerId
                 ));
             }
             

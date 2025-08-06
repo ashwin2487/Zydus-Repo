@@ -5,6 +5,7 @@ trigger AccountTrigger on Account (before insert, before update, after insert, a
         }
         if (Trigger.isUpdate) {
             AccountTriggerHandler.preventBusinessOwnerCreditLimitChange(Trigger.new, Trigger.oldMap);
+            AccountTriggerHandler.preventBusinessOwnerPriceBookChange(Trigger.new, Trigger.old);
         }
     }
 

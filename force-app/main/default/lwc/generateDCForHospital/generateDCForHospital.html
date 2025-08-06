@@ -44,7 +44,8 @@
                     onclick={handleAddProduct} class="slds-m-top_large slds-m-right_small">
                 </lightning-button>
 
-                <lightning-button variant="brand" label="Save Challan" onclick={saveChallan} class="slds-m-top_medium">
+                <lightning-button variant="brand" label={saveBtnLabel} onclick={saveChallan} class="slds-m-top_medium"
+                    disabled={disableSaveBtn}>
                 </lightning-button>
 
             </template>
@@ -95,16 +96,38 @@
                     </lightning-combobox>
 
                     <p><span style="color: red;">*</span>Available Product</p>
-                    <template if:true={hasLineItems}>
-                        <lightning-datatable key-field="Id" label="Available Product" data={warehouseLineItems}
-                            columns={lineItemsColumn} selected-rows={selectedRows} onrowselection={handleRowSelection}>
-                        </lightning-datatable>
-                    </template>
+                    <div class="slds-is-relative" style="min-height: 100px;">
+                        <template if:true={isLoading}>
+                            <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                        </template>
 
+                        <template if:false={isLoading}>
+                            <template if:true={hasLineItems}>
+                                <div class="slds-form-element slds-grid slds-gutters">
+                                    <div class="slds-form-element__control slds-col slds-size_1-of-2 slds-p-around_small"
+                                        style="position: relative;">
+                                        <input type="text" class="slds-input"
+                                            data-id="inputFieldScan" placeholder={bulkScanPlaceholder}
+                                            oninput={handleBulkSerialChange} />
 
-                    <template if:false={hasLineItems}>
-                        <p class="slds-text-color_weak slds-align_absolute-center">No Product Available</p>
-                    </template>
+                                        <div
+                                            style="position: absolute; top: 50%; right: 1.25rem; transform: translateY(-50%); pointer-events: none;">
+                                            <lightning-icon icon-name="utility:scan" size="small"
+                                                alternative-text="Scan"></lightning-icon>
+                                        </div>
+                                    </div>
+                                </div>
+                                 <lightning-datatable key-field="Id" label="Available Product"
+                                    data={tableData} columns={lineItemsColumn} 
+                                    selected-rows={selectedRowKeys}
+                                    onrowselection={handleRowSelection}>
+                                </lightning-datatable>
+                            </template>
+                            <template if:false={hasLineItems}>
+                                <p class="slds-text-color_weak slds-align_absolute-center">No Product Available</p>
+                            </template>
+                        </template>
+                    </div>
                 </div>
 
                 <!-- Modal Footer -->

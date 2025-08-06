@@ -1,0 +1,84 @@
+<template>
+    <lightning-card title="Price Book Data Importer & Exporter" icon-name="utility:feed">
+        <div class="slds-p-around_medium">
+
+            <div class="slds-grid slds-align_absolute-center slds-m-bottom_medium">
+                <lightning-radio-group options={radioOptions} value={activeSection} onchange={handleRadioChange}
+                    type="button" variant="container">
+                </lightning-radio-group>
+            </div>
+
+            <template if:true={isExportView}>
+                <div class="slds-box slds-theme_default slds-p-around_medium slds-border_rounded">
+                    <h2 class="slds-text-heading_medium slds-m-bottom_medium">Export Price Books</h2>
+
+                    <p class="slds-m-bottom_small">Select the Price Books you want to export. You can select multiple
+                        entries.</p>
+
+                    <lightning-dual-listbox name="pricebooks" label="Available Price Books" source-label="Available"
+                        selected-label="Selected for Export"
+                        field-level-help="Move items from Available to Selected to prepare them for export."
+                        options={priceBookOptions} value={selectedPriceBooks} onchange={handlePriceBookSelectionChange}>
+                    </lightning-dual-listbox>
+
+                    <template if:true={hasSelectedPriceBooks}>
+                        <div class="slds-m-top_large">
+                            <h3 class="slds-text-heading_small slds-m-bottom_small">Ready for Export:</h3>
+                            <lightning-pill-container items={selectedPills} onitemremove={handlePillRemove}>
+                            </lightning-pill-container>
+                        </div>
+                    </template>
+                    <div class="slds-grid slds-grid_align-end slds-m-top_large">
+                        <lightning-button variant="brand-outline" label={exportLable}
+                            title="Export Selected Price Books" icon-name="utility:download" onclick={handleExport}
+                            disabled={isExportDisabled}>
+                        </lightning-button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Import Section -->
+            <template if:true={isImportView}>
+                <div class="slds-p-around_medium">
+                    <div class="slds-m-bottom_medium upload-container">
+                        <template if:true={isLoading}>
+                            <div class="spinner-container">
+                                <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                                <p class="loading-text">Please wait, processing...</p>
+                            </div>
+                        </template>
+
+                        <input type="file" id="file-upload-input" class="slds-hide" accept=".csv,.xls,.xlsx"
+                            onchange={handleFileChange} />
+                        <label for="file-upload-input" class={dropZoneClass}>
+                            <lightning-icon icon-name="utility:upload" size="large"
+                                class="slds-m-bottom_small"></lightning-icon>
+                            <p class="main-text">Drag & Drop or <span class="browse-text">Browse Files</span></p>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_small">
+                                Supported file types: .csv, .xls, .xlsx
+                            </p>
+                        </label>
+
+                        <template if:true={fileUploaded}>
+                        <div class="uploaded-file-info slds-m-top_medium">
+                            <span><strong>Uploaded File:</strong> {fileName}</span>
+                            <lightning-button-icon icon-name="utility:close" variant="bare" alternative-text="Remove"
+                                title="Remove File" onclick={handleRemoveFile} class="delete-button">
+                            </lightning-button-icon>
+                        </div>
+                    </template>
+                    </div>
+                    
+                    <template if:true={fileUploaded}>
+                        <div class="slds-m-top_medium slds-text-align_right">
+                            <lightning-button label={importLable} onclick={handleStartProcess} variant="brand"
+                                disabled={disableImportProcessBtn}>
+                            </lightning-button>
+                        </div>
+                    </template>
+
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

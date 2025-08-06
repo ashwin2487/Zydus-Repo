@@ -80,7 +80,7 @@ public without sharing class AutoGrnForHospitalOnDcHandler {
                 Manufactured_Date__c = dcItem.Manufacturing_Date__c,
                 Expiry_Date__c = dcItem.Expiry_Date__c,
                 Condition__c = 'Good',
-                Status__c = 'Free',
+                Status__c = 'Available',
                 Delivery_Challan_Line_Item__c = dcItem.Id,
                 Unit_Price__c = dcItem.Unit_Price__c
             );
@@ -122,16 +122,54 @@ public without sharing class AutoGrnForHospitalOnDcHandler {
             if (String.isNotBlank(hospital.CC_Email_Address__c))
                 emailAddresses.add(hospital.CC_Email_Address__c);
         }
+        grn = [
+            SELECT Id, Name, Accepted_Products__c, Rejected_Products__c, 
+            Delivery_Challan__r.Name,
+            Delivery_Challan__r.Supply_Order__r.New_Purchase_order__c
+            FROM GRN__c 
+            WHERE Id = :grn.Id
+        ];
         
-        String subject = 'New GRN Created: ' + grn.Name;
-        String body = 'Dear User,\n\n'
-            + 'A new GRN (Goods Receipt Note) "' + grn.Name + '" has been successfully created.\n\n'
-            + 'Details:\n'
-            + '- Accepted Quantity: ' + grn.Accepted_Products__c + '\n'
-            + '- Rejected Quantity: ' + grn.Rejected_Products__c + '\n'
-            + '- Against Delivery Challan: ' + dc.Name + '\n\n'
-            + 'Please review the GRN for further actions.\n\n'
-            + 'Best regards,\nZydus DMS';
+        List<Purchase_Order__c> toUpdateCurList = new List<Purchase_Order__c>();
+        List<Purchase_Order__c> poList = [
+            SELECT Id, Name, StageName__c, Total_Ordered_Quantity__c, 
+            Total_Pending_Quantity__c, Total_Supplied_Quantity__c, Manual_Closure_Reason__c
+            FROM Purchase_Order__c 
+            WHERE Id = :grn.Delivery_Challan__r.Supply_Order__r.New_Purchase_order__c
+        ];
+        
+        Boolean isPOClosed = false;
+        String poName = '';
+        string comment = '0';
+        for (Purchase_Order__c curPO : poList) {
+            if (curPO.Total_Ordered_Quantity__c == curPO.Total_Supplied_Quantity__c) {
+                curPO.StageName__c = 'Purchase Order Closed';
+                curPO.CloseDate__c = System.today();
+                isPOClosed = true;
+                poName = curPO.Name;
+                curPO.Manual_Closure_Reason__c = 'System Generated Message : Material Received Completely.';
+                comment = curPO.Manual_Closure_Reason__c;
+            }
+            toUpdateCurList.add(curPO);
+        }
+        
+        if (!toUpdateCurList.isEmpty()) {
+            update toUpdateCurList;
+        }
+                String subject = 'New GRN Created: ' + grn.Name;
+                
+                String body = 'Dear User,\n\n'
+                    + 'A new GRN (Goods Receipt Note) record "' + grn.Name + '" has been successfully created.\n\n'
+                    + 'Details:\n'
+                    + '- Accepted Quantity: ' + grn.Accepted_Products__c + '\n'
+                    + '- Rejected Quantity: ' + grn.Rejected_Products__c + '\n'
+                    + '- Against Delivery Challan: ' + grn.Delivery_Challan__r.Name + '\n';
+                
+                if (isPOClosed && String.isNotBlank(poName)) {
+                    body += '- Purchase Order "' + poName + '" is marked as Closed with comment: ' + comment + '\n';
+                }
+                
+                body += '\nPlease review the GRN for further actions.\n\nBest regards,\nZydus DMS';
         
         if (!userIds.isEmpty()) NotificationService.notifyUsers(userIds, grn.Id, subject, body);
         if (!emailAddresses.isEmpty()) NotificationService.sendEmail(emailAddresses, subject, body);

@@ -53,14 +53,16 @@ public class UserCreationQueue implements Queueable {
         Id superDistributorPermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'superDistributorpermissionSet' LIMIT 1].Id;
         Id distributorPermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'distributorpermissionSet' LIMIT 1].Id;
         Id subDistributorPermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'subDistributorpermissionSet' LIMIT 1].Id;
-		
+        Id casePermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'Case_Permission_Set' LIMIT 1].Id;
+
         Map<String, Id> recordTypeToRoleId = new Map<String, Id>();
         for (UserRole user : [SELECT Id, Name FROM UserRole]) {
             recordTypeToRoleId.put(user.Name, user.Id);
         }
 
         List<PermissionSetAssignment> psaList = new List<PermissionSetAssignment>();
-		Id managerid = [select Id , name from User where username = 'ashwinhzydus@gmail.com.developer'].id;
+        List<List<Id>> allUserPermissionSets = new List<List<Id>>();
+
         for (ContactUserWrapper data : contactUserData) {
             if (data.accountId == null || !accountMap.containsKey(data.accountId)) continue;
 
@@ -68,20 +70,23 @@ public class UserCreationQueue implements Queueable {
             String recordType = acc.RecordType.Name;
             Id roleId = recordTypeToRoleId.get(recordType);
             Id profileId;
-            Id permissionSetId;
-            
+            List<Id> permissionSetIds = new List<Id>();
+
             if (recordType == 'Super Distributor') {
                 profileId = superDistributorProfileId;
-                permissionSetId = superDistributorPermissionSetId;
+                permissionSetIds.add(superDistributorPermissionSetId);
             } else if (recordType == 'Distributor') {
                 profileId = distributorProfileId;
-                permissionSetId = distributorPermissionSetId;
+                permissionSetIds.add(distributorPermissionSetId);
             } else if (recordType == 'Sub Distributor') {
                 profileId = subDistributorProfileId;
-                permissionSetId = subDistributorPermissionSetId;
+                permissionSetIds.add(subDistributorPermissionSetId);
             } else {
                 continue;
             }
+
+            // Add Case Permission Set for all users
+            permissionSetIds.add(casePermissionSetId);
 
             String username = data.email;
             String alias = (data.firstName + data.lastName).length() > 8
@@ -100,11 +105,11 @@ public class UserCreationQueue implements Queueable {
                 TimeZoneSidKey = 'America/Los_Angeles',
                 LocaleSidKey = 'en_US',
                 EmailEncodingKey = 'UTF-8',
-                LanguageLocaleKey = 'en_US',
-                managerid = managerid
+                LanguageLocaleKey = 'en_US'
             );
 
             usersToCreate.add(user);
+            allUserPermissionSets.add(permissionSetIds);
         }
 
         Database.SaveResult[] results = Database.insert(usersToCreate, false);
@@ -113,25 +118,14 @@ public class UserCreationQueue implements Queueable {
             if (results[i].isSuccess()) {
                 User u = usersToCreate[i];
                 ContactUserWrapper data = contactUserData[i];
-                Account acc = accountMap.get(data.accountId);
-                String recordType = acc.RecordType.Name;
 
-                Id permissionSetId;
-                if (recordType == 'Super Distributor') {
-                    permissionSetId = superDistributorPermissionSetId;
-                } else if (recordType == 'Distributor') {
-                    permissionSetId = distributorPermissionSetId;
-                } else if (recordType == 'Sub Distributor') {
-                    permissionSetId = subDistributorPermissionSetId;
-                } else {
-                    continue;
+                for (Id permSetId : allUserPermissionSets[i]) {
+                    PermissionSetAssignment psa = new PermissionSetAssignment(
+                        AssigneeId = u.Id,
+                        PermissionSetId = permSetId
+                    );
+                    psaList.add(psa);
                 }
-
-                PermissionSetAssignment psa = new PermissionSetAssignment(
-                    AssigneeId = u.Id,
-                    PermissionSetId = permissionSetId
-                );
-                psaList.add(psa);
 
                 String tempPassword = generateRandomPassword();
                 try {
@@ -179,6 +173,7 @@ public class UserCreationQueue implements Queueable {
             chars.add(CHAR_SET.substring(index, index + 1));
         }
 
+        // Shuffle
         for (Integer i = chars.size() - 1; i > 0; i--) {
             Integer j = Math.mod(Math.abs(Crypto.getRandomInteger()), i + 1);
             String temp = chars[i];

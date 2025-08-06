@@ -1,5 +1,8 @@
-trigger InvoiceCreationTrigger on Invoice__c (before insert) {
+trigger InvoiceCreationTrigger on Invoice__c (before insert, after insert) {
     if(Trigger.isBefore && Trigger.isInsert){
-        InvoiceCreationController.checkOutstandingCreditLimit(Trigger.new);
+        InvoiceCreationTriggerHandler.checkOutstandingCreditLimit(Trigger.new);
+    }
+    if(trigger.isAfter && trigger.isInsert){
+        InvoiceCreationTriggerHandler.shareInvoices(trigger.new);
     }
 }

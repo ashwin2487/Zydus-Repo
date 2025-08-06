@@ -1,3 +1,10 @@
 .custom-container{
 	color : black;
 }
+
+.custom-dropdown {
+    position: absolute;
+    top: 100%;
+    z-index: 1000;
+    width: 100%;
+}

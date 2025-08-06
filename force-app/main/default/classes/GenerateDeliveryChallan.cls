@@ -1,6 +1,6 @@
 public without sharing class GenerateDeliveryChallan {
     @AuraEnabled
-    public static String createDeliveryChallan(Id supplyOrderId) {
+    public static String createDeliveryChallan(Id supplyOrderId, String courierName, String courierDocketNo, String courierDate) {
         try {
             ID userId = UserInfo.getUserId();
             
@@ -10,18 +10,44 @@ public without sharing class GenerateDeliveryChallan {
                 Consignor_Distributor__c, Consignor_Distributor__r.Business_owner__c,
                 New_Purchase_Order__r.RecordType.Name,
                 Consignee_Hospital__r.Invoice_Comment__c,
-                Consignee_Distributor__r.Business_owner__c
+                Consignee_Distributor__r.Business_owner__c,consignor_Hospital__c
                 FROM Supply_Order__c
                 WHERE Id = :supplyOrderId
                 LIMIT 1
             ];
-            
-            Id paretnAccountUserId = supplyOrder.Consignor_Distributor__r.Business_owner__c;
-            if (userId != paretnAccountUserId) {
-                return 'Access denied: Unauthorized entry attempt detected. Please reach out to your system administrator immediately.';
+            if(supplyOrder.RecordType.Name == 'SO') {
+                Id parentAccountUserId = supplyOrder.Consignor_Distributor__r?.Business_owner__c;
+                if(parentAccountUserId == null) {
+                    return 'Access denied: Business owner not assigned for Consignor Distributor.';
+                }
+                if(userId != parentAccountUserId) {
+                    return 'Access denied: Unauthorized entry attempt detected. Please reach out to your system administrator immediately.';
+                }
+            }
+            else if(supplyOrder.RecordType.Name == 'RSO') {
+
+                if(supplyOrder.consignor_Hospital__c != null) {
+                    Id consigneeUserId = supplyOrder.Consignee_Distributor__r?.Business_owner__c;
+                    if(consigneeUserId == null) {
+                        return 'Access denied: Business owner not assigned for Consignee Distributor.';
+                    }
+                    if(userId != consigneeUserId) {
+                        return 'Access denied: Unauthorized entry attempt detected. Please reach out to your system administrator immediately.';
+                    }
+                }
+                else {
+                    Id consignorUserId = supplyOrder.Consignor_Distributor__r?.Business_owner__c;
+                    if(consignorUserId == null) {
+                        return 'Access denied: Business owner not assigned for Consignor Distributor.';
+                    }
+                    if(userId != consignorUserId) {
+                        return 'Access denied: Unauthorized entry attempt detected. Please reach out to your system administrator immediately.';
+                    }
+                }
             }
             
-            // RecordType Mapping
+            
+            
             Map<String, Id> recordTypeMap = new Map<String, Id>();
             for (RecordType rt : [
                 SELECT Id, Name FROM RecordType WHERE SObjectType = 'Delivery_Challan__c'
@@ -40,21 +66,36 @@ public without sharing class GenerateDeliveryChallan {
             Boolean isManualSO = (supplyOrder.New_Purchase_Order__c == null);
             
             Delivery_Challan__c dc = new Delivery_Challan__c();
-            dc.Name = supplyOrder.Name.replace('SO', 'DC');
+            
             dc.Supply_Order__c = supplyOrder.Id;
             dc.DC_Generated_Date__c = System.today();
             dc.Consignor_Distributor__c = supplyOrder.Consignor_Distributor__c;
+            dc.Courier_Name__c = courierName;
+            dc.Courier_Docket_No__c = courierDocketNo;
+            dc.Courier_Date__c = Date.valueOf(courierDate);
             
-            if (supplyOrder.Consignee_Distributor__c != null) {
+            if (supplyOrder.Consignee_Distributor__c != null && supplyOrder.Consignee_Hospital__c == null) {
                 dc.Consignee_Distributor__c = supplyOrder.Consignee_Distributor__c;
-                dc.RecordTypeId = supplyOrder.RecordType.Name == 'RSO' ? recordTypeMap.get('RDC') : recordTypeMap.get('DC');
                 
                 if (supplyOrder.RecordType.Name == 'RSO') {
-                    dc.OwnerId = supplyOrder.Consignor_Distributor__r.Business_owner__c;
-                } else {
+                    if(supplyOrder.Consignee_Distributor__c != null && supplyOrder.Consignor_Hospital__c != null && supplyOrder.Consignor_Distributor__c == null){
+                        dc.Name = supplyOrder.Name.replace('RSO', 'Return Note');  
+                        dc.RecordTypeId = recordTypeMap.get('RDC');
+                        dc.Consignor_Hospital__c = supplyOrder.Consignor_Hospital__c;
+                        dc.OwnerId = supplyOrder.Consignee_Distributor__r.Business_owner__c;
+                    }else if(supplyOrder.Consignee_Distributor__c != null && supplyOrder.Consignor_Hospital__c == null && supplyOrder.Consignor_Distributor__c != null){
+                        dc.Name = supplyOrder.Name.replace('RSO', 'Return Note');  
+                        dc.RecordTypeId = recordTypeMap.get('RDC'); 
+                        dc.Consignor_Distributor__c = supplyOrder.Consignor_Distributor__c;
+                        dc.OwnerId = supplyOrder.Consignee_Distributor__r.Business_owner__c;
+                    }
+                } else if(supplyOrder.RecordType.Name == 'SO') {
+                    dc.Name = supplyOrder.Name.replace('SO', 'DC');
+                    dc.RecordTypeId = recordTypeMap.get('DC');
                     dc.OwnerId = supplyOrder.Consignee_Distributor__r.Business_owner__c;
                 }
-            } else if (supplyOrder.Consignee_Hospital__c != null) {
+            } else if(supplyOrder.RecordType.Name == 'HSO') {
+                dc.Name = supplyOrder.Name.replace('SO', 'HDC');
                 dc.Consignee_Hospital__c = supplyOrder.Consignee_Hospital__c;
                 dc.RecordTypeId = recordTypeMap.get('HDC');
                 if (supplyOrder.Consignee_Hospital__r.Comment_Options__c != null &&
@@ -66,18 +107,11 @@ public without sharing class GenerateDeliveryChallan {
             
             insert dc;
             
-            Set<Id> shareUserIds = new Set<Id>{
-                supplyOrder.Consignor_Distributor__r.Business_owner__c
-                    };
-                        if (supplyOrder.Consignee_Distributor__r != null) {
-                            shareUserIds.add(supplyOrder.Consignee_Distributor__r.Business_owner__c);
-                        }
-            RecordSharingUtilityBulk.shareRecords(new List<Id>{dc.Id}, shareUserIds);
             
             List<Supply_Order_Line_Item__c> soLineItems = [
                 SELECT Id, Zydus_Product__c, Zydus_Product__r.Name, Net_Amount__c, Batch_Number__c,
                 CGST__c, SGST__c, IGST__c, HSN_Code__c, Serial_Number__c, Unit_Price__c,
-                Warehouse__c, Name, Expiry_Date__c, Manufacturing_Date__c, List_Price__c, Zydus_Price_Book_Entry__c
+                Warehouse__c, Name, Expiry_Date__c, Manufacturing_Date__c, Zydus_Price_Book_Entry__c
                 FROM Supply_Order_Line_Item__c
                 WHERE Supply_Order__c = :supplyOrder.Id
             ];
@@ -116,7 +150,6 @@ public without sharing class GenerateDeliveryChallan {
                         SGST__c = soItem.SGST__c,
                         IGST__c = soItem.IGST__c,
                         Zydus_Price_Book_Entry__c = soItem.Zydus_Price_Book_Entry__c,
-                        List_Price__c = soItem.List_Price__c,
                         Unit_Price__c = soItem.Unit_Price__c,
                         HSN_Code__c = soItem.HSN_Code__c,
                         Serial_Number__c = soItem.Serial_Number__c,
@@ -130,23 +163,40 @@ public without sharing class GenerateDeliveryChallan {
             }
             insert dcLineItems;
             
-            List<Warehouse_Product_Line_Items__c> toUpdateStatusList = new List<Warehouse_Product_Line_Items__c>();
-            for (Warehouse_Product_Line_Items__c curLineItem : [
-                SELECT Id, Status__c
-                FROM Warehouse_Product_Line_Items__c
-                WHERE Supply_Order_Line_Item__c IN :soLineItemsIDSet
-            ]) {
-                if (curLineItem.Status__c == 'Committed') {
-                    curLineItem.Status__c = 'In Transit';
-                    toUpdateStatusList.add(curLineItem);
+            if (supplyOrder.RecordType.Name != 'RSO') {
+                List<Warehouse_Product_Line_Items__c> toUpdateStatusList = new List<Warehouse_Product_Line_Items__c>();
+                for (Warehouse_Product_Line_Items__c curLineItem : [
+                    SELECT Id, Status__c
+                    FROM Warehouse_Product_Line_Items__c
+                    WHERE Supply_Order_Line_Item__c IN :soLineItemsIDSet
+                ]) {
+                    if (curLineItem.Status__c == 'Committed') {
+                        curLineItem.Status__c = 'In Transit';
+                        toUpdateStatusList.add(curLineItem);
+                    }
                 }
+                update toUpdateStatusList;
             }
-            update toUpdateStatusList;
+            
+            if (supplyOrder.RecordType.Name == 'RSO') {
+                List<Warehouse_Product_Line_Items__c> toUpdateStatusList = new List<Warehouse_Product_Line_Items__c>();
+                for (Warehouse_Product_Line_Items__c curLineItem : [
+                    SELECT Id, Status__c
+                    FROM Warehouse_Product_Line_Items__c
+                    WHERE Supply_Order_Line_Item__c IN :soLineItemsIDSet
+                ]) {
+                    if (curLineItem.Status__c == 'Delivered') {
+                        curLineItem.Status__c = 'Material Returned';
+                        toUpdateStatusList.add(curLineItem);
+                    }
+                }
+                update toUpdateStatusList;
+            }
             
             supplyOrder.isDCCreated__c = true;
             update supplyOrder;
             
-            if (!isManualSO) {
+            if (!isManualSO && supplyOrder.RecordType.Name != 'RSO') {
                 List<Purchase_Order_Product__c> POPs = [
                     SELECT Id, Quantity__c, Supplied_Quantity__c, Zydus_Product__c
                     FROM Purchase_Order_Product__c
@@ -165,16 +215,26 @@ public without sharing class GenerateDeliveryChallan {
                 List<Purchase_Order_Product__c> POPsToUpdate = new List<Purchase_Order_Product__c>();
                 Set<Id> updatedPopIds = new Set<Id>();
                 
+                Map<Id, Integer> productToQtyMap = new Map<Id, Integer>();
                 for (Supply_Order_Line_Item__c soItem : soLineItems) {
-                    Purchase_Order_Product__c pop = productToPOPMap.get(soItem.Zydus_Product__c);
-                    if (pop != null && !updatedPopIds.contains(pop.Id)) {
-                        pop.Supplied_Quantity__c = (pop.Supplied_Quantity__c == null ? 0 : pop.Supplied_Quantity__c) + 1;
-                        POPsToUpdate.add(pop);
-                        updatedPopIds.add(pop.Id);
+                    if (soItem.Zydus_Product__c != null) {
+                        if (!productToQtyMap.containsKey(soItem.Zydus_Product__c)) {
+                            productToQtyMap.put(soItem.Zydus_Product__c, 1);
+                        } else {
+                            productToQtyMap.put(soItem.Zydus_Product__c, productToQtyMap.get(soItem.Zydus_Product__c) + 1);
+                        }
                     }
                 }
-                
+                for (Id productId : productToQtyMap.keySet()) {
+                    if (productToPOPMap.containsKey(productId)) {
+                        Purchase_Order_Product__c pop = productToPOPMap.get(productId);
+                        Integer existingQty = (pop.Supplied_Quantity__c == null) ? 0 : Integer.valueOf(pop.Supplied_Quantity__c);
+                        pop.Supplied_Quantity__c = existingQty + productToQtyMap.get(productId);
+                        POPsToUpdate.add(pop);
+                    }
+                }
                 update POPsToUpdate;
+                
                 
                 List<Purchase_Order_Product__c> updateStatusList = [
                     SELECT Id, SO_Status__c, Supplied_Quantity__c, Quantity__c
@@ -192,6 +252,21 @@ public without sharing class GenerateDeliveryChallan {
                 update updateStatusList;
             }
             
+            List<Purchase_Order__c> toUpdateCurList = new List<Purchase_Order__c>();
+            List<Purchase_Order__c> poList = [SELECT Id, StageName__c, Total_Ordered_Quantity__c, Total_Pending_Quantity__c , Total_Supplied_Quantity__c FROM Purchase_Order__c WHERE Id =: supplyOrder.New_Purchase_Order__c];
+            for (Purchase_Order__c curPO : poList) {
+                if (curPO.Total_Ordered_Quantity__c == curPO.Total_Supplied_Quantity__c) {
+                    curPO.StageName__c = 'SO Completely Dispatched';
+                } else if (curPO.Total_Pending_Quantity__c > 0 || curPO.Total_Supplied_Quantity__c != curPO.Total_Ordered_Quantity__c) {
+                    curPO.StageName__c = 'SO Partially Dispatched';
+                }
+                
+                toUpdateCurList.add(curPO);
+            }
+            
+            if (!toUpdateCurList.isEmpty()) {
+                update toUpdateCurList;
+            }
             Delivery_Challan__c curDC = [
                 SELECT Id, Name, Supply_Order__r.Name,
                 Consignee_Distributor__r.Business_Owner__c, Consignee_Distributor__r.Business_Owner__r.Email,
@@ -235,6 +310,7 @@ public without sharing class GenerateDeliveryChallan {
             return 'Error: ' + ex.getMessage();
         }
     }
+    
     @AuraEnabled
     public static Id createDCForHospital(String payload) {
         
@@ -276,17 +352,15 @@ public without sharing class GenerateDeliveryChallan {
             [SELECT Id, Serial_Number__c, Status__c, Expiry_Date__c, Manufactured_Date__c, Warehouse__r.Warehouse__c,
              Batch_Number__c, Delivery_Challan_Line_Item__r.CGST__c, Warehouse__r.Zydus_Product__r.HSN_Code__r.Name,
              Warehouse__r.Zydus_Product__c,
-             Delivery_Challan_Line_Item__r.IGST__c, List_Price__c, Delivery_Challan_Line_Item__r.HSN_Code__c,
+             Delivery_Challan_Line_Item__r.IGST__c, Delivery_Challan_Line_Item__r.HSN_Code__c,
              Delivery_Challan_Line_Item__r.SGST__c, Delivery_Challan_Line_Item__r.Net_Amount__c,Unit_Price__c
              FROM Warehouse_Product_Line_Items__c
              WHERE Id IN :lineItemIds]
         );
         List<Warehouse_Product_Line_Items__c> wpliToUpdate=new List<Warehouse_Product_Line_Items__c>();
         for(Warehouse_Product_Line_Items__c wpli:lineItemMap.values()){
-            if (wpli.Status__c == 'Committed') { 
-                wpli.Status__c = 'In Transit';
-                wpliToUpdate.add(wpli);
-            }
+            wpli.Status__c = 'In Transit';
+            wpliToUpdate.add(wpli);
         }
         
         if(!wpliToUpdate.isEmpty()){
@@ -400,7 +474,6 @@ public without sharing class GenerateDeliveryChallan {
                     Delivery_Challan__c = dc.Id,
                     DC_Product__c       = prodToDcProdId.get(pw.productId),
                     Unit_Price__c       = unitPrice,
-                    List_Price__c       = wpLineItem.List_Price__c,
                     Zydus_Product__c    = pw.productId,
                     Serial_Number__c    = wpLineItem.Serial_Number__c,
                     Batch_Number__c     = wpLineItem.Batch_Number__c,
@@ -664,7 +737,7 @@ public without sharing class GenerateDeliveryChallan {
             Warehouse__r.Name,
             Warehouse__r.Zydus_Product__r.Name
             FROM Warehouse_Product_Line_Items__c
-            WHERE Warehouse__c IN :wpIds AND Status__c='Free' AND Condition__c='Good'
+            WHERE Warehouse__c IN :wpIds AND Status__c='Available' AND Condition__c='Good'
         ];
     }
 }

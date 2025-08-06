@@ -865,11 +865,28 @@ export default class InvoiceDownloadPage extends LightningElement {
         const signatureWidth = footerRightWidth;
         const signatureHeight = footerHeight / 2;
 
+        // doc.setFont('helvetica', 'bold');
+        // doc.setFontSize(10);
+        // doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 15, { align: 'center' });
+        // doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
+        // doc.text('Authorised Signatory:', signatureX + signatureWidth / 2, yPosition + signatureHeight + 15, { align: 'center' });
+
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 15, { align: 'center' });
+        doc.setFontSize(9);
+
+        // Left signature - Receiver Signature
+        doc.text('Receiver Signature', signatureX + signatureWidth / 2, yPosition + 18, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+        doc.text(`(${this.consigneeName})`, signatureX + signatureWidth / 2, yPosition + 23, { align: 'center' });
+
+        // Draw the signature line
         doc.line(signatureX, yPosition + signatureHeight, signatureX + signatureWidth, yPosition + signatureHeight);
-        doc.text('Authorised Signatory:', signatureX + signatureWidth / 2, yPosition + signatureHeight + 15, { align: 'center' });
+
+        // Right signature - Authorised Signatory
+        doc.setFont('helvetica', 'bold'); // Back to bold for the label
+        doc.text('Authorised Signatory.', signatureX + signatureWidth / 2, yPosition + signatureHeight + 18, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); // Change to normal font for the name
+        doc.text(`(${this.consignorName})`, signatureX + signatureWidth / 2, yPosition + signatureHeight + 23, { align: 'center' });
 
         const fileName = `Tax_Invoice_${this.invoiceNumber || 'Document'}.pdf`;
         doc.save(fileName);

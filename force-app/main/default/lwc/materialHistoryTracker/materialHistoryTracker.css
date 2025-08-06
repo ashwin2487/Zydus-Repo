@@ -1,0 +1,52 @@
+/* --- TIMELINE CONTAINER AND LINE --- */
+.timeline {
+    list-style-type: none;
+    padding-left: 1.5rem;
+    position: relative;
+    border-left: 2px solid #d8dadb; /* The main timeline vertical line */
+    margin-left: 1rem;
+}
+
+/* --- INDIVIDUAL TIMELINE ITEM --- */
+.timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -20px; 
+    top: 1.2rem;   
+    background-color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2; 
+}
+
+.timeline-icon-completed {
+    --sds-c-icon-color-background: #0070d2; /* SLDS blue */
+    --sds-c-icon-color-foreground: white;
+    border-radius: 50%;
+    padding: 0.2rem;
+}
+
+.timeline-icon-current {
+    --sds-c-icon-color-background: #2e844a; /* SLDS success green */
+    --sds-c-icon-color-foreground: white;
+    border-radius: 50%;
+    padding: 0.3rem; /* Make the current icon slightly larger */
+}
+
+/* --- TIMELINE CONTENT BOX --- */
+.timeline-content {
+    margin-left: 1.5rem;
+    position: relative;
+    border-left-width: 4px;
+    border-left-style: solid;
+}

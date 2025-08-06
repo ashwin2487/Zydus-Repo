@@ -18,7 +18,7 @@ public with sharing class OpportunitySupplyOrderHelper {
         @AuraEnabled public String productName;
         @AuraEnabled public Decimal requestedQty;
         @AuraEnabled public Decimal availableQty;
-        @AuraEnabled public Decimal unitPrice;
+        @AuraEnabled public Decimal mrp;
         @AuraEnabled public Decimal cgst;
         @AuraEnabled public Decimal sgst;
         @AuraEnabled public Decimal igst;
@@ -34,7 +34,7 @@ public with sharing class OpportunitySupplyOrderHelper {
             String productName, 
             Decimal requestedQty,
             Decimal availableQty, 
-            Decimal unitPrice, 
+            Decimal mrp,
             Decimal cgst, 
             Decimal sgst, 
             Decimal igst,
@@ -49,17 +49,18 @@ public with sharing class OpportunitySupplyOrderHelper {
             this.productName = productName;
             this.requestedQty = requestedQty;
             this.availableQty = availableQty;
-            this.unitPrice = unitPrice;
+            this.mrp = mrp;
             this.cgst = cgst;
             this.sgst = sgst;
             this.igst = igst;
-            this.hsnId = hsnId;
             this.hsnCode = hsnCode;
+            this.warehouseOptions = warehouseOptions != null ? warehouseOptions : new List<WarehouseOption>();
             this.pendingQty = pendingQty;
             this.pricebookEntry = pricebookEntry;
-            this.warehouseOptions = warehouseOptions != null ? warehouseOptions : new List<WarehouseOption>();
+            this.hsnId = hsnId;
         }
     }
+    
     
     public class WarehouseOption {
         @AuraEnabled public String label;
@@ -76,7 +77,7 @@ public with sharing class OpportunitySupplyOrderHelper {
         @AuraEnabled public Id lineItemId;
         @AuraEnabled public Id productId;
         @AuraEnabled public Integer quantity;
-        @AuraEnabled public Decimal unitPrice;
+        @AuraEnabled public Decimal mrp;
         @AuraEnabled public Decimal cgst;
         @AuraEnabled public Decimal sgst;
         @AuraEnabled public Decimal igst;
@@ -140,6 +141,7 @@ public with sharing class OpportunitySupplyOrderHelper {
             FROM Purchase_Order_Product__c
             WHERE Purchase_Order__c = :purchaseOrderId
             AND SO_Status__c != 'SO Dispatched'
+            AND Pending_Quantity__c > 0
         ];
         
         Set<Id> productIds = new Set<Id>();
@@ -159,7 +161,7 @@ public with sharing class OpportunitySupplyOrderHelper {
         Map<String, Zydus_Price_Book_Entry__c> pricebookEntryMap = new Map<String, Zydus_Price_Book_Entry__c>();
         if (!productIds.isEmpty() && !pricebookIds.isEmpty()) {
             for (Zydus_Price_Book_Entry__c pbe : [
-                SELECT Id, Zydus_Product__c, Zydus_Price_Book__c, List_Price__c,
+                SELECT Id, Zydus_Product__c, Zydus_Price_Book__c, Zydus_Product__r.MRP__c,
                 Zydus_Product__r.Name
                 FROM Zydus_Price_Book_Entry__c
                 WHERE Zydus_Product__c IN :productIds
@@ -209,7 +211,7 @@ public with sharing class OpportunitySupplyOrderHelper {
                 
                 for (Primary_DC_Product_Line_Item__c line : dcLineItems) {
                     if (line.Is_Expired__c == true) continue;
-                    if (line.Status__c != 'Free' || line.Condition__c != 'Good') continue;
+                    if (line.Status__c != 'Available' || line.Condition__c != 'Good') continue;
                     
                     Id prodId = line.Primary_DC_Product__r.Zydus_Product__c;
                     Id dcId = line.Primary_DC__c;
@@ -258,7 +260,7 @@ public with sharing class OpportunitySupplyOrderHelper {
                 
                 for (Warehouse_Product_Line_Items__c line : lineItems) {
                     if (line.Is_Expired__c == true) continue;
-                    if (line.Status__c != 'Free' || line.Condition__c != 'Good') continue;
+                    if (line.Status__c != 'Available' || line.Condition__c != 'Good') continue;
                     
                     Id prodId = line.Warehouse__r.Zydus_Product__c;
                     Id whId = line.Warehouse__r.Warehouse__r.Id;
@@ -297,7 +299,6 @@ public with sharing class OpportunitySupplyOrderHelper {
                 continue;
             }
             
-            Decimal unitPrice = pop.UnitPrice__c != null ? pop.UnitPrice__c : 0;
             Decimal qty = pop.Quantity__c != null ? pop.Quantity__c : 0;
             Decimal cgstPct = 0;
             Decimal sgstPct = 0;
@@ -343,7 +344,7 @@ public with sharing class OpportunitySupplyOrderHelper {
                 prodName,          
                 pop.Quantity__c,        
                 availableQty,
-                pop.UnitPrice__c,
+                pbe != null && pbe.Zydus_Product__r.MRP__c != null ? pbe.Zydus_Product__r.MRP__c : 0,
                 cgstPct, 
                 sgstPct, 
                 igstPct, 
@@ -431,16 +432,6 @@ public with sharing class OpportunitySupplyOrderHelper {
             so = buildSupplyOrder(po, isARS, isHospitalOrder);
             insert so;
             
-            if (so != null && po.Supplier_Distributor__c != null && po.Account__c != null) {
-                List<Id> recordIdsToShare = new List<Id>{ so.Id };
-                    Set<Id> userIdsToShareWith = new Set<Id>{
-                        po.Supplier_Distributor__c,
-                            po.Account__c
-                            };
-                                
-                                RecordSharingUtilityBulk.shareRecords(recordIdsToShare, userIdsToShareWith);
-            }
-            
             so = [
                 SELECT Id, Name, New_Purchase_Order__c, SO_Generated_Date__c, is_ARS_SO__c,
                 Consignee_Distributor__r.Business_Owner__c, 
@@ -463,17 +454,6 @@ public with sharing class OpportunitySupplyOrderHelper {
             
             so = buildSupplyOrder(po, isARS, isHospitalOrder);
             insert so;
-            if (so != null && parentAccount.Business_owner__c != null) {
-                List<Id> recordIdsToShare = new List<Id> { so.Id };
-                    Set<Id> userIds = new Set<Id> {parentAccount.Business_owner__c};
-                        if (isHospitalOrder) {
-                        } else if (po.Account__r.Business_Owner__c != null) {
-                            userIds.add(po.Account__r.Business_Owner__c);
-                        }
-                
-                RecordSharingUtilityBulk.shareRecords(recordIdsToShare, userIds);
-            }
-            
             so = [
                 SELECT Id, Name, New_Purchase_Order__c, SO_Generated_Date__c, is_ARS_SO__c,
                 Consignee_Distributor__r.Business_Owner__c, 
@@ -497,30 +477,41 @@ public with sharing class OpportunitySupplyOrderHelper {
     
     
     private static Supply_Order__c buildSupplyOrder(Purchase_Order__c po, Boolean isARS, Boolean isHospitalOrder) {
-        Supply_Order__c so = new Supply_Order__c(
-            Name = po.Name.replace('PO','SO'),
-            New_Purchase_Order__c = po.Id,
-            SO_Generated_Date__c = Date.today(),
-            is_ARS_SO__c = isARS,
-            Consignor_Distributor__c = po.Supplier_Distributor__c,
-            OwnerId = po.Account__r.Business_Owner__c
-        );
+        Map<String, Id> recordTypeMap = new Map<String, Id>();
+        for (RecordType rt : [SELECT Id, Name FROM RecordType WHERE SObjectType = 'Supply_Order__c']) {
+            recordTypeMap.put(rt.Name, rt.Id);
+        }
+        
+        Supply_Order__c so = new Supply_Order__c();
         
         if (isHospitalOrder) {
-            so.Consignee_Hospital__c = po.Hospital__c;
             Hospital__c curHospital = [
-                SELECT Id, Comment_Options__c, Invoice_Comment__c 
+                SELECT Id, Comment_Options__c, Invoice_Comment__c
                 FROM Hospital__c 
                 WHERE Id = :po.Hospital__c 
                 LIMIT 1
             ];
-            
+            so.Name = po.Name.replace('PO','SO');
+            so.New_Purchase_Order__c = po.Id;
+            so.SO_Generated_Date__c = Date.today();
+            so.is_ARS_SO__c = isARS;
+            so.Consignor_Distributor__c = po.Supplier_Distributor__c;
+            so.OwnerId = po.Account__r.Business_Owner__c;
+            so.RecordtypeId = recordTypeMap.get('HSO');
+            so.Consignee_Hospital__c = po.Hospital__c;
             if (curHospital.Comment_Options__c != null && 
                 curHospital.Comment_Options__c.contains('SOL') && 
                 curHospital.Invoice_Comment__c != null) {
                     so.Comment__c = curHospital.Invoice_Comment__c;
                 }
         } else {
+            so.Name = po.Name.replace('PO','SO');
+            so.New_Purchase_Order__c = po.Id;
+            so.SO_Generated_Date__c = Date.today();
+            so.is_ARS_SO__c = isARS;
+            so.Consignor_Distributor__c = po.Supplier_Distributor__c;
+            so.OwnerId = po.Account__r.Business_Owner__c;
+            so.RecordtypeId = recordTypeMap.get('SO');
             so.Consignee_Distributor__c = po.Account__c;
         }
         
@@ -539,7 +530,6 @@ public with sharing class OpportunitySupplyOrderHelper {
         Set<String> userIds = new Set<String>();
         List<String> emailAddresses = new List<String>();
         
-        // Consignee Business Owner
         if (so.Consignee_Distributor__r != null && so.Consignee_Distributor__r.Business_Owner__c != null) {
             userIds.add(so.Consignee_Distributor__r.Business_Owner__c);
             if (so.Consignee_Distributor__r.Business_Owner__r.Email != null) {
@@ -547,7 +537,6 @@ public with sharing class OpportunitySupplyOrderHelper {
             }
         }
         
-        // Consignor (Parent Account logic)
         if (so.Consignor_Distributor__c != null) {
             Account parentAccount = AccountAccessUtil.getParentBusinessOwner(so.Consignor_Distributor__c);
             if (parentAccount != null && parentAccount.Business_Owner__c != null) {
@@ -596,11 +585,11 @@ public with sharing class OpportunitySupplyOrderHelper {
         if (primaryDC != null && !primaryDC.is_Moved_To_Warehouse__c) {
             List<Primary_DC_Product_Line_Item__c> dcStockItems = [
                 SELECT Id, Primary_DC_Product__r.Zydus_Product__c, Batch_Number__c, Condition__c, Expiry_Date__c,
-                Serial_Number__c, Status__c, Is_Expired__c, Manufacturing_Date__c, Primary_DC_Product__r.Id, List_Price__c, Unit_Price__c
+                Serial_Number__c, Status__c, Is_Expired__c, Manufacturing_Date__c, Primary_DC_Product__r.Id
                 FROM Primary_DC_Product_Line_Item__c
                 WHERE Primary_DC__c = :primaryDC.Id
                 AND Primary_DC_Product__r.Zydus_Product__c IN :productIds
-                AND Status__c = 'Free'
+                AND Status__c = 'Available'
                 AND Condition__c = 'Good'
                 AND Is_Expired__c = false
                 ORDER BY CreatedDate ASC
@@ -616,9 +605,9 @@ public with sharing class OpportunitySupplyOrderHelper {
         } else {
             List<Warehouse_Product_Line_Items__c> whStockItems = [
                 SELECT Id, Warehouse__r.Zydus_Product__c, Warehouse__c, Batch_Number__c, Condition__c, Expiry_Date__c,
-                Serial_Number__c, Status__c, Is_Expired__c, Connected_Warehouse__c, Manufactured_Date__c, Unit_Price__c, List_Price__c
+                Serial_Number__c, Status__c, Is_Expired__c, Connected_Warehouse__c, Manufactured_Date__c, Unit_Price__c, Warehouse__r.Zydus_product__r.MRP__c
                 FROM Warehouse_Product_Line_Items__c
-                WHERE Status__c = 'Free'
+                WHERE Status__c = 'Available'
                 AND Condition__c = 'Good'
                 AND Is_Expired__c = false
                 AND Warehouse__r.Zydus_Product__c IN :productIds
@@ -652,7 +641,7 @@ public with sharing class OpportunitySupplyOrderHelper {
         Map<Id, Integer> productToP = new Map<Id, Integer>();
         Map<Id, Integer> productToSuffix = new Map<Id, Integer>();
         Integer pCounter = 1;
-        
+        Integer baseSuffix = 1;
         List<Supply_Order_Line_Item__c> solineItemsToInsert = new List<Supply_Order_Line_Item__c>();
         List<Primary_DC_Product_Line_Item__c> assignedDCStock = new List<Primary_DC_Product_Line_Item__c>();
         List<Warehouse_Product_Line_Items__c> assignedWHStock = new List<Warehouse_Product_Line_Items__c>();
@@ -684,17 +673,13 @@ public with sharing class OpportunitySupplyOrderHelper {
             
             for (Integer i = 0; i < qty; i++) {
                 Integer suffixIndex = productToSuffix.get(dto.productId);
-                String baseSuffix = '';
                 Integer temp = suffixIndex;
-                while (temp > 0) {
-                    Integer rem = Math.mod(temp - 1, 26);
-                    baseSuffix = ALPHA.substring(rem, rem + 1) + baseSuffix;
-                    temp = (temp - 1) / 26;
-                }
+                
+           
                 productToSuffix.put(dto.productId, suffixIndex + 1);
                 
                 String orderNumber = so.Name.replace('SO-', '');
-                String name = 'SOP' + productToP.get(dto.productId) + '/' + orderNumber + '/' + baseSuffix;
+                String name = 'SOP' + productToP.get(dto.productId) + '/' + orderNumber + '/' + baseSuffix++;
                 
                 if (primaryDC != null && !primaryDC.is_Moved_To_Warehouse__c) {
                     Primary_DC_Product_Line_Item__c assignedItem = stockMapDC.get(key).remove(0);
@@ -711,7 +696,7 @@ public with sharing class OpportunitySupplyOrderHelper {
                         HSN_Code__c = dto.hsnId,
                         Net_Amount__c = dto.netAmount,
                         Primary_DC__c = primaryDC.Id,
-                        Unit_Price__c = dto.unitPrice,
+                        Unit_Price__c = dto.mrp,
                         Zydus_Price_Book_Entry__c = dto.pricebookEntry,
                         Primary_DC_Product_Line_Item__c = assignedItem.Id,
                         Batch_Number__c = assignedItem.Batch_Number__c,
@@ -736,7 +721,7 @@ public with sharing class OpportunitySupplyOrderHelper {
                         HSN_Code__c = dto.hsnId,
                         Net_Amount__c = dto.netAmount,
                         Warehouse__c = dto.warehouseId,
-                        Unit_Price__c = dto.unitPrice,
+                        Unit_Price__c = dto.mrp,
                         Zydus_Price_Book_Entry__c=dto.pricebookEntry,
                         Warehouse_Product_Line_Item__c = assignedItem.Id,
                         Batch_Number__c = assignedItem.Batch_Number__c,
@@ -851,5 +836,309 @@ public with sharing class OpportunitySupplyOrderHelper {
         if (!toUpdateCurList.isEmpty()) {
             update toUpdateCurList;
         }
+    }
+    
+    @AuraEnabled
+    public static Warehouse_Product_Line_Items__c getWPLIBySerialNumber(String serialNumber, List<String> productId) {
+        Account currUserAcc = [
+            SELECT Id 
+            FROM Account 
+            WHERE Business_Owner__c = :UserInfo.getUserId() 
+            LIMIT 1
+        ];
+        
+        Set<Id> whIds = new Set<Id>();
+        for (Warehouse__c wh : [
+            SELECT Id 
+            FROM Warehouse__c 
+            WHERE Account__c = :currUserAcc.Id
+        ]) {
+            whIds.add(wh.Id);
+        }
+        
+        List<Warehouse_Product_Line_Items__c> items = [
+            SELECT Connected_Warehouse__r.Name, Serial_Number__c, Status__c, Condition__c,
+            Batch_Number__c, Expiry_Date__c, Manufactured_Date__c, Unit_Price__c, Warehouse__r.Zydus_Product__r.Name
+            FROM Warehouse_Product_Line_Items__c 
+            WHERE Connected_Warehouse__c IN :whIds
+            AND Serial_Number__c = :serialNumber
+            AND Warehouse__r.Zydus_Product__c IN:productId
+            AND Status__c = 'Available'
+            AND Condition__c = 'Good'
+            LIMIT 1
+        ];
+        return (items.isEmpty()) ? null : items[0];
+    }
+    
+    private static List<SupplyOrderLineInputDTOScan> parseLinesJsonScan(String linesJson) {
+        try {
+            return (List<SupplyOrderLineInputDTOScan>) JSON.deserialize(linesJson, List<SupplyOrderLineInputDTOScan>.class);
+        } catch (Exception e) {
+            throw new AuraHandledException('Invalid order lines JSON format: ' + e.getMessage());
+        }
+    }
+    
+    @AuraEnabled
+    public static Id createSOBySerialNumbers(Id purchaseOrderId,String linesJson){
+        if (purchaseOrderId == null) {
+            throw new AuraHandledException('Purchase Order Id is required.');
+        }
+        
+        Id userId = UserInfo.getUserId();
+        
+        Purchase_Order__c po = [
+            SELECT Id, Name, Supplier_Distributor__c, Account__c, Hospital__c, RecordType.Name,
+            Supplier_Distributor__r.RecordTypeId, Account__r.Business_Owner__c
+            FROM Purchase_Order__c
+            WHERE Id = :purchaseOrderId
+            LIMIT 1
+        ];
+        
+        if (po == null) {
+            throw new AuraHandledException('Purchase Order not found.');
+        }
+        
+        Account parentAccount = [
+            SELECT Id, OwnerId, Business_owner__c
+            FROM Account
+            WHERE Id = :po.Supplier_Distributor__c
+            LIMIT 1
+        ];
+        
+        if (parentAccount.Business_owner__c != userId) {
+            throw new AuraHandledException('Access denied: Only the owner of the Parent Account can create a Supply Order.');
+        }
+        
+        User currentUser = [
+            SELECT Id, UserRole.Name, Profile.Name
+            FROM User
+            WHERE Id = :userId
+            LIMIT 1
+        ];
+        
+        String userRole = currentUser.UserRole != null ? currentUser.UserRole.Name : '';
+        String userProfile = currentUser.Profile != null ? currentUser.Profile.Name : '';
+        
+        if (!(userRole == 'Super Distributor' || userRole == 'Distributor' || userRole == 'Sub Distributor' || userProfile == 'System Administrator')) {
+            throw new AuraHandledException('Access denied: Only Super Distributor, Distributor, Sub Distributor roles, or System Administrators can create Supply Orders.');
+        }
+        
+        Map<String, Id> recordTypeMap = new Map<String, Id>();
+        for (RecordType rt : [SELECT Id, Name FROM RecordType WHERE SObjectType = 'Account']) {
+            recordTypeMap.put(rt.Name, rt.Id);
+        }
+        
+        Boolean isARS = po.RecordType != null && (po.RecordType.Name == 'Purchase Order');
+        Boolean isHospitalOrder = po.RecordType != null && po.RecordType.Name == 'Hospital Purchase Order';
+        
+        if (isHospitalOrder && po.Hospital__c == null) {
+            throw new AuraHandledException('Hospital is missing on Hospital Purchase Order.');
+        }
+        
+        Supply_Order__c so = buildSupplyOrder(po, isARS, isHospitalOrder);
+        insert so;
+        
+        so = [SELECT Id, Name, New_Purchase_Order__c, SO_Generated_Date__c, is_ARS_SO__c,
+              Consignee_Distributor__r.Business_Owner__c, 
+              Consignee_Distributor__r.Business_Owner__r.Email, 
+              Consignee_Distributor__r.Business_Owner__r.Name, 
+              Consignor_Distributor__r.Business_Owner__c,
+              Consignor_Distributor__r.Business_Owner__r.Email, 
+              Consignor_Distributor__r.Business_Owner__r.Name,
+              New_Purchase_Order__r.Name,
+              Consignee_Hospital__c
+              FROM Supply_Order__c
+              WHERE Id = :so.Id
+             ];
+        
+        List<SupplyOrderLineInputDTOScan> lines = parseLinesJsonScan(linesJson);
+        createSupplyOrderLineItemsBySerialNo(so, lines);
+        sendSupplyOrderNotification(so);
+        
+        return so.Id;
+    }
+    
+    public static void createSupplyOrderLineItemsBySerialNo(Supply_Order__c so, List<SupplyOrderLineInputDTOScan> lines) {
+        final String ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        if (lines == null || lines.isEmpty()) {
+            throw new AuraHandledException('No line items provided.');
+        }
+        
+        Set<String> serialNumbers = new Set<String>();
+        Set<Id> productIds = new Set<Id>();
+        for (SupplyOrderLineInputDTOScan dto : lines) {
+            serialNumbers.add(dto.serialNumber);
+            productIds.add(dto.productId);
+        }
+        
+        Map<String, Warehouse_Product_Line_Items__c> stockMap = new Map<String, Warehouse_Product_Line_Items__c>();
+        for (Warehouse_Product_Line_Items__c item : [
+            SELECT Id, Serial_Number__c, Status__c, Batch_Number__c, Expiry_Date__c, Manufactured_Date__c
+            FROM Warehouse_Product_Line_Items__c
+            WHERE Serial_Number__c IN :serialNumbers
+        ]) {
+            stockMap.put(item.Serial_Number__c, item);
+        }
+        
+        if (stockMap.size() != serialNumbers.size()) {
+            throw new AuraHandledException('One or more scanned serial numbers are invalid, already committed, or not found.');
+        }
+        
+        Map<Id, SO_Product__c> productToSOProduct = new Map<Id, SO_Product__c>();
+        List<SO_Product__c> soProductsToInsert = new List<SO_Product__c>();
+        for (Id productId : productIds) {
+            soProductsToInsert.add(new SO_Product__c(
+                Zydus_Product__c = productId,
+                Supply_Order__c = so.Id
+            ));
+        }
+        insert soProductsToInsert;
+        
+        for (SO_Product__c sop : soProductsToInsert) {
+            productToSOProduct.put(sop.Zydus_Product__c, sop);
+        }
+        
+        List<Supply_Order_Line_Item__c> solineItemsToInsert = new List<Supply_Order_Line_Item__c>();
+        List<Warehouse_Product_Line_Items__c> stockToUpdate = new List<Warehouse_Product_Line_Items__c>();
+        Map<Id, Integer> productToP = new Map<Id, Integer>();
+        Map<Id, Integer> productToSuffix = new Map<Id, Integer>();
+        
+        Integer pCounter = 1;
+        
+        for (SupplyOrderLineInputDTOScan dto : lines) {
+            Warehouse_Product_Line_Items__c stockItem = stockMap.get(dto.serialNumber);
+            if (!productToP.containsKey(dto.productId)) {
+                productToP.put(dto.productId, pCounter++);
+                productToSuffix.put(dto.productId, 1);
+            }
+            Integer suffixIndex = productToSuffix.get(dto.productId);
+            String baseSuffix = '';
+            Integer temp = suffixIndex;
+            while (temp > 0) {
+                Integer rem = Math.mod(temp - 1, 26);
+                baseSuffix = ALPHA.substring(rem, rem + 1) + baseSuffix;
+                temp = (temp - 1) / 26;
+            }
+            productToSuffix.put(dto.productId, suffixIndex + 1);
+            
+            String orderNumber = so.Name.replace('SO-', '');
+            String name = 'SOP' + productToP.get(dto.productId) + '/' + orderNumber + '/' + baseSuffix;
+            
+            solineItemsToInsert.add(new Supply_Order_Line_Item__c(
+                Supply_Order__c = so.Id,
+                Name = name,
+                SO_Product__c = productToSOProduct.get(dto.productId).Id,
+                Zydus_Product__c = dto.productId,
+                Warehouse_Product_Line_Item__c = stockItem.Id,
+                Serial_Number__c = dto.serialNumber,
+                CGST__c = dto.cgst,
+                SGST__c = dto.sgst,
+                IGST__c = dto.igst,
+                HSN_Code__c = dto.hsnId,
+                Net_Amount__c = dto.netAmount,
+                Unit_Price__c = dto.mrp,
+                Zydus_Price_Book_Entry__c = dto.pricebookEntry,
+                Batch_Number__c = stockItem.Batch_Number__c,
+                Expiry_Date__c = stockItem.Expiry_Date__c,
+                Manufacturing_Date__c = stockItem.Manufactured_Date__c
+            ));
+        }
+        
+        Database.SaveResult[] insertResults = Database.insert(solineItemsToInsert, false);
+        
+        Map<Integer, Id> successfulInsertIndexToStockId = new Map<Integer, Id>();
+        for(Integer i = 0; i < insertResults.size(); i++) {
+            if(insertResults[i].isSuccess()) {
+                String serial = solineItemsToInsert[i].Serial_Number__c;
+                Id stockId = stockMap.get(serial).Id;
+                Id newSOLIId = insertResults[i].getId();
+                
+                stockToUpdate.add(new Warehouse_Product_Line_Items__c(
+                    Id = stockId,
+                    Status__c = 'Committed',
+                    Supply_Order_Line_Item__c = newSOLIId
+                ));
+            }
+        }
+        
+        if(!stockToUpdate.isEmpty()){
+            update stockToUpdate;
+        }
+        
+        Map<Id, Integer> productInsertedQtyMap = new Map<Id, Integer>();
+        for (Supply_Order_Line_Item__c soLineItem : solineItemsToInsert) {
+            Integer currentQty = productInsertedQtyMap.get(soLineItem.Zydus_Product__c) == null ? 0 : productInsertedQtyMap.get(soLineItem.Zydus_Product__c);
+            productInsertedQtyMap.put(soLineItem.Zydus_Product__c, currentQty + 1);
+        }
+        
+        List<Purchase_Order_Product__c> popsToUpdate = [
+            SELECT Id, Pending_Quantity__c, Quantity__c, SO_Status__c, Zydus_Product__c
+            FROM Purchase_Order_Product__c
+            WHERE Zydus_Product__c IN :productIds AND Purchase_Order__c = :so.New_Purchase_Order__c
+        ];
+        
+        for (Purchase_Order_Product__c pop : popsToUpdate) {
+            Integer deductedQty = productInsertedQtyMap.get(pop.Zydus_Product__c);
+            if (deductedQty != null) {
+                pop.Pending_Quantity__c -= deductedQty;
+                if (pop.Pending_Quantity__c == 0) {
+                    pop.SO_Status__c = 'SO Created';
+                } else {
+                    pop.SO_Status__c = 'SO Partially Created';
+                }
+            }
+        }
+        if(!popsToUpdate.isEmpty()){
+            update popsToUpdate; 
+        }
+        
+        Purchase_Order__c po = [SELECT Id, Total_Pending_Quantity__c, Total_Ordered_Quantity__c FROM Purchase_Order__c WHERE Id = :so.New_Purchase_Order__c];
+        if (po.Total_Pending_Quantity__c == 0) {
+            po.StageName__c = 'SO Created';
+        } else {
+            po.StageName__c = 'SO Partially Created';
+        }
+        update po;
+    }
+    
+    public class SupplyOrderLineInputDTOScan {
+        @AuraEnabled public Id lineItemId;
+        @AuraEnabled public Id productId;
+        @AuraEnabled public String serialNumber;
+        @AuraEnabled public Decimal mrp;
+        @AuraEnabled public Decimal cgst;
+        @AuraEnabled public Decimal sgst;
+        @AuraEnabled public Decimal igst;
+        @AuraEnabled public Decimal netAmount;
+        @AuraEnabled public Id warehouseId;
+        @AuraEnabled public Id hsnId;
+        @AuraEnabled public Id pricebookEntry;
+    }
+    
+    @AuraEnabled(cacheable=true)
+    public static List<Warehouse_Product_Line_Items__c> getSerialNumbers(String keyword, Id productId) {
+        String searchTerm = '%' + keyword + '%';
+        
+        List<Account> userAccounts = [SELECT Id FROM Account WHERE Business_Owner__c = :UserInfo.getUserId() LIMIT 1];
+        
+        if (userAccounts.isEmpty()) {
+            return new List<Warehouse_Product_Line_Items__c>(); 
+        }
+        
+        List<Warehouse__c> whList = [SELECT Id FROM Warehouse__c WHERE Account__c = :userAccounts[0].Id];
+        
+        if (whList.isEmpty()) {
+            return new List<Warehouse_Product_Line_Items__c>();
+        }
+        
+        return [
+            SELECT Serial_Number__c
+            FROM Warehouse_Product_Line_Items__c
+            WHERE Warehouse__r.Zydus_Product__c = :productId 
+            AND Serial_Number__c LIKE :searchTerm
+            AND Connected_Warehouse__c IN :whList
+            AND Status__c='Available'
+            AND Condition__c='Good'
+        ];
     }
 }

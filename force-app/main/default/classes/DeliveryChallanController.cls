@@ -22,6 +22,7 @@ public with sharing class DeliveryChallanController {
                     Consignee_Hospital__r.DL_no__c,
                     Consignee_Hospital__r.GST_Number__c,
                     Consignee_Hospital__r.PAN_Number__c,
+                    Consignee_Hospital__r.Ship_Title__c,
                     
                     Consignee_Distributor__r.Name,
                     Consignee_Distributor__r.Address__c,

@@ -1,7 +1,6 @@
 public with sharing class SupplyOrderController {
     @AuraEnabled(cacheable=true)
     public static SupplyOrderWrapper getSupplyOrderDetails(Id recordId) {
-        // Return empty wrapper if recordId is null
         if (recordId == null) {
             return new SupplyOrderWrapper(null, new List<Warehouse__c>(), new List<Warehouse__c>());
         }
@@ -76,18 +75,15 @@ public with sharing class SupplyOrderController {
                 LIMIT 1
             ];
             
-            // If no supply order found, return empty wrapper
             if (supplyOrders.isEmpty()) {
                 return new SupplyOrderWrapper(null, new List<Warehouse__c>(), new List<Warehouse__c>());
             }
             
             Supply_Order__c supplyOrder = supplyOrders[0];
             
-            // Initialize warehouse lists
             List<Warehouse__c> consignorWarehouses = new List<Warehouse__c>();
             List<Warehouse__c> consigneeWarehouses = new List<Warehouse__c>();
             
-            // Fetch consignor warehouses only if Consignor_Distributor__c is not null
             if (supplyOrder.Consignor_Distributor__c != null) {
                 try {
                     consignorWarehouses = [
@@ -166,6 +162,38 @@ public with sharing class SupplyOrderController {
                 return this.supplyOrder.SO_Products__r.size();
             }
             return 0;
+        }
+    }
+    
+    @AuraEnabled(cacheable=true)
+    public static String getRecordType(Id recordId){
+        if (recordId == null) {
+            return '';
+        }
+        
+        try {
+            String sObjectType = recordId.getSObjectType().getDescribe().getName();
+            
+            String query = 'SELECT RecordTypeId FROM ' + sObjectType + ' WHERE Id = :recordId LIMIT 1';
+            List<SObject> records = Database.query(query);
+            
+            if (records.isEmpty() || records[0].get('RecordTypeId') == null) {
+                return '';
+            }
+            
+            Id recordTypeId = (Id) records[0].get('RecordTypeId');
+            
+            List<RecordType> recordTypes = [SELECT Name FROM RecordType WHERE Id = :recordTypeId LIMIT 1];
+            
+            if (recordTypes.isEmpty()) {
+                return '';
+            }
+            
+            return String.isBlank(recordTypes[0].Name) ? '' : recordTypes[0].Name;
+            
+        } catch (Exception e) {
+            System.debug('Error getting RecordType name: ' + e.getMessage());
+            return '';
         }
     }
     
@@ -281,7 +309,7 @@ public with sharing class SupplyOrderController {
             Manufactured_Date__c,
             Unit_Price__c
             FROM Warehouse_Product_Line_Items__c
-            WHERE Connected_Warehouse__c IN :warehouseIds AND Status__c='Free' AND Condition__c='Good'
+            WHERE Connected_Warehouse__c IN :warehouseIds AND Status__c='Available' AND Condition__c='Good'
         ];
     }
     
@@ -316,6 +344,12 @@ public with sharing class SupplyOrderController {
         } catch (Exception e) {
             throw new AuraHandledException('Error fetching products: ' + e.getMessage());
         }
+    }
+    
+    @AuraEnabled
+    public static Zydus_Price_Book__c getConsigneePB(Id consigneeId){
+        Id PBId=[SELECT Id, Zydus_Price_Book__c FROM Account WHERE Id=:consigneeId].Zydus_Price_Book__c;
+        return [SELECT Id, Name FROM Zydus_Price_Book__c WHERE Id=:PBId];
     }
     
     @AuraEnabled
@@ -421,6 +455,8 @@ public with sharing class SupplyOrderController {
         final String ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         Map<Id, Integer> productToSopNumber = new Map<Id, Integer>();
         Map<Id, Integer> productToSuffix = new Map<Id, Integer>(); 
+        Integer productCounter = 1;
+        Integer baseSuffix=1;
         
         List<Supply_Order_Line_Item__c> lineItems = new List<Supply_Order_Line_Item__c>();
         List<Warehouse_Product_Line_Items__c> wpliToUpdate = new List<Warehouse_Product_Line_Items__c>();
@@ -429,8 +465,6 @@ public with sharing class SupplyOrderController {
             if (String.isBlank(item.zydusProductId)) continue;
             
             String orderNumber = so.Name.replace('SO-', '');
-            
-            Integer productCounter = 1;
             
             if (!productToSopNumber.containsKey(item.zydusProductId)) {
                 productToSopNumber.put(item.zydusProductId, productCounter);
@@ -441,16 +475,10 @@ public with sharing class SupplyOrderController {
             Integer suffixIndex = productToSuffix.containsKey(item.zydusProductId)
                 ? productToSuffix.get(item.zydusProductId)
                 : 1;
-            String baseSuffix = '';
-            Integer temp = suffixIndex;
-            while (temp > 0) {
-                Integer rem = Math.mod(temp - 1, 26);
-                baseSuffix = ALPHA.substring(rem, rem + 1) + baseSuffix;
-                temp = (temp - 1) / 26;
-            }
+         
             productToSuffix.put(item.zydusProductId, suffixIndex + 1);
             
-            String soliName = 'SOP' + sopNumber + '/' + orderNumber + '/' + baseSuffix;
+            String soliName = 'SOP' + sopNumber + '/' + orderNumber + '/' + baseSuffix++;
             
             SO_Product__c soProduct = zydusToSoProductMap.get(item.zydusProductId);
             if (soProduct == null) {
@@ -546,4 +574,8 @@ public with sharing class SupplyOrderController {
         public String unitPrice;
     }
     
+    @AuraEnabled(Cacheable=true)
+    public static Account getAccountDetails(){
+        return [SELECT Id, Name FROM Account WHERE Business_Owner__c=:UserInfo.getUserId() ];
+    }
 }

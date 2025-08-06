@@ -118,8 +118,13 @@ public without sharing class PurchaseOrderController {
     
     /********MANUAL PO************/
     @AuraEnabled
-    public static List<Zydus_Product__c> getAllZydusProducts(){
-        return [SELECT Id, Name FROM Zydus_Product__c];
+    public static List<Brand__c> getAllBrands(){
+        return [SELECT Id, Name FROM Brand__c];
+    }
+    
+    @AuraEnabled
+    public static List<Zydus_Product__c> getAllZydusProducts(String brandId){
+        return [SELECT Id, Name, Brand__r.Name, Size__c FROM Zydus_Product__c WHERE Brand__c =:brandId];
     }
     
     @AuraEnabled
@@ -156,48 +161,46 @@ public without sharing class PurchaseOrderController {
     
     
     @AuraEnabled(cacheable=true)
-    public static Zydus_Price_Book_Entry__c getPriceBookEntry(Id productId, Id priceBookId) {
+    public static List<Zydus_Price_Book_Entry__c> getPriceBookEntry(List<Id> productIds, Id priceBookId) {
         List<Zydus_Price_Book_Entry__c> entries = [
-            SELECT Id, Name, Zydus_Product__c, Zydus_Price_Book__c, Bill_Discount_Amount__c,
+            SELECT Id, Name, Zydus_Product__r.Name, Zydus_Product__r.Size__c, Zydus_Price_Book__c, Bill_Discount_Amount__c,
             Credit_Note_Amount__c, Is_Active__c, Minimum_Order_Quantity_MOQ__c,
-            List_Price__c, Unit_Price__c, Use_Brand_Pricing__c
+            Zydus_Product__r.MRP__c, Unit_Price__c
             FROM Zydus_Price_Book_Entry__c
-            WHERE Zydus_Product__c = :productId
+            WHERE Zydus_Product__c IN :productIds
             AND Zydus_Price_Book__c = :priceBookId
-            LIMIT 1
         ];
-        return entries.isEmpty() ? null : entries[0];
+        return entries.isEmpty() ? null : entries;
     }
     
-    @AuraEnabled
-    public static Zydus_Price_Book_Entry__c savePriceBookEntry(String productId, String priceBookId, Boolean useBrandPricing) {
-        try {
-            Zydus_Price_Book_Entry__c entry = new Zydus_Price_Book_Entry__c(
-                Zydus_Product__c        = productId,
-                Zydus_Price_Book__c     = priceBookId,
-                Use_Brand_Pricing__c    = useBrandPricing,
-                Is_Active__c            = true
-            );
-            
-            insert entry;
-            
-            entry = [
-                SELECT Id, Name, Zydus_Product__c, Zydus_Price_Book__c, Bill_Discount_Amount__c,
-                Credit_Note_Amount__c, Is_Active__c, Minimum_Order_Quantity_MOQ__c,
-                List_Price__c, Unit_Price__c, Use_Brand_Pricing__c
-                FROM Zydus_Price_Book_Entry__c
-                WHERE Id = :entry.Id
-                LIMIT 1
-            ];
-            
-            return entry;
-            
-        } catch (DmlException e) {
-            throw new AuraHandledException(
-                'Unable to create Price Book Entry: ' + e.getDmlMessage(0)
-            );
-        }
-    }
+    /*@AuraEnabled
+public static Zydus_Price_Book_Entry__c savePriceBookEntry(String productId, String priceBookId) {
+try {
+Zydus_Price_Book_Entry__c entry = new Zydus_Price_Book_Entry__c(
+Zydus_Product__c        = productId,
+Zydus_Price_Book__c     = priceBookId,
+Is_Active__c            = true
+);
+
+insert entry;
+
+entry = [
+SELECT Id, Name, Zydus_Product__c, Zydus_Price_Book__c, Bill_Discount_Amount__c,
+Credit_Note_Amount__c, Is_Active__c, Minimum_Order_Quantity_MOQ__c,
+Zydus_Product__r.MRP__c, Unit_Price__c, Use_Brand_Pricing__c
+FROM Zydus_Price_Book_Entry__c
+WHERE Id = :entry.Id
+LIMIT 1
+];
+
+return entry;
+
+} catch (DmlException e) {
+throw new AuraHandledException(
+'Unable to create Price Book Entry: ' + e.getDmlMessage(0)
+);
+}
+}*/
     
     public class ProductInput {
         public String productId;
@@ -209,7 +212,6 @@ public without sharing class PurchaseOrderController {
         public Decimal billDiscount;
         public Decimal creditNote;
         public Decimal unitTaxablePrice;
-        public Boolean useBrandPricing;
     }
     
     public class PORequest {
@@ -218,6 +220,7 @@ public without sharing class PurchaseOrderController {
         public String supplierId;
         public String priceBookId;
         public List<ProductInput> products;
+        public Boolean approvePurchaseOrder;
     }
     
     public class AddProductsRequest {
@@ -314,7 +317,7 @@ public without sharing class PurchaseOrderController {
             Account__c = request.accountId,
             Supplier_Distributor__c = request.supplierId,
             Zydus_Price_Book__c = request.priceBookId,
-            StageName__c = 'Draft Purchase Order',
+            StageName__c = request.approvePurchaseOrder? 'Approve Purchase Order' : 'Draft Purchase Order',
             RecordTypeId = recordTypeMap.get('Manual Purchase Order')
         );
         insert po;
@@ -347,7 +350,7 @@ public without sharing class PurchaseOrderController {
                 Zydus_Product__c = prod.productId,
                 Quantity__c = quantity,
                 UnitPrice__c = unitPrice,
-                List_Price__c = prod.listPrice,
+                List_Price__c = prod.mrp,
                 Pending_Quantity__c = quantity,
                 SO_Status__c = 'SO Pending',
                 Zydus_Price_Book__c = request.priceBookId,
@@ -362,6 +365,49 @@ public without sharing class PurchaseOrderController {
             insert productsToInsert;
         }
         
+        Purchase_Order__c purchaseOrder = [
+            SELECT Id, Name,
+            Account__r.Business_Owner__r.Id,
+            Account__r.Business_Owner__r.Name,
+            Account__r.Business_Owner__r.Email,
+            Supplier_Distributor__r.Business_Owner__r.Id,
+            Supplier_Distributor__r.Business_Owner__r.Name,
+            Supplier_Distributor__r.Business_Owner__r.Email
+            FROM Purchase_Order__c
+            WHERE Id = :po.Id
+        ];
+        
+        Map<Id, User> recipients = new Map<Id, User>();
+        
+        if (purchaseOrder.Account__r?.Business_Owner__r?.Email != null) {
+            recipients.put(purchaseOrder.Account__r.Business_Owner__r.Id, purchaseOrder.Account__r.Business_Owner__r);
+        }
+        
+        if (purchaseOrder.Supplier_Distributor__r?.Business_Owner__r?.Email != null) {
+            recipients.put(purchaseOrder.Supplier_Distributor__r.Business_Owner__r.Id, purchaseOrder.Supplier_Distributor__r.Business_Owner__r);
+        }
+        
+        if (!recipients.isEmpty()) {
+            List<String> emailsToSend = new List<String>();
+            Set<String> notifyUserIds=new Set<String>();
+            String subject = 'New Purchase Order: ' + purchaseOrder.Name;
+            String body = 'Dear User,\n\n' +
+                'We are pleased to inform you that a new Purchase Order (' + purchaseOrder.Name +
+                ') has been successfully created in the Zydus DMS.\n\n' +
+                'You may review the Purchase Order details at your convenience.\n\n' +
+                'Best regards,\n' +
+                'Zydus DMS Team';            
+            for (User recipient : recipients.values()) {
+                emailsToSend.add(recipient.Email);
+                notifyUserIds.add(recipient.Id);
+            }
+            if(!notifyUserIds.isEmpty()){
+                NotificationService.notifyUsers(notifyUserIds, purchaseOrder.Id, subject, body);                
+            }
+            if (!emailsToSend.isEmpty()) {
+                NotificationService.sendEmail(emailsToSend, subject, body);
+            }
+        }
         return po.Id;
     }
     
@@ -494,7 +540,7 @@ public without sharing class PurchaseOrderController {
                 Purchase_Order_Product__c existingProd = existingProdMap.get(prod.productId);
                 existingProd.Quantity__c = quantity;
                 existingProd.UnitPrice__c = unitPrice;
-                existingProd.List_Price__c = prod.listPrice;
+                existingProd.List_Price__c = prod.mrp;
                 existingProd.Pending_Quantity__c = quantity;
                 existingProd.SO_Status__c = 'SO Pending';
                 existingProd.CGST__c = cgst;
@@ -510,7 +556,7 @@ public without sharing class PurchaseOrderController {
                     Zydus_Product__c = prod.productId,
                     Quantity__c = quantity,
                     UnitPrice__c = unitPrice,
-                    List_Price__c = prod.listPrice,
+                    List_Price__c = prod.mrp,
                     Pending_Quantity__c = quantity,
                     SO_Status__c = 'SO Pending',
                     Zydus_Price_Book__c = request.selectedPriceBookId,
@@ -540,7 +586,7 @@ public without sharing class PurchaseOrderController {
         
         Purchase_Order__c po = [
             SELECT Id, StageName__c, Manual_Closure_Reason__c,
-            Supplier_Distributor__r.Business_Owner__c,Supplier_Distributor__c
+            Supplier_Distributor__r.Business_Owner__c,Supplier_Distributor__c,Total_Pending_Quantity__c
             FROM Purchase_Order__c
             WHERE Id = :recordId
             LIMIT 1
@@ -550,7 +596,7 @@ public without sharing class PurchaseOrderController {
             throw new AuraHandledException('Supplier Distributor or Business Owner not defined.');
         }
         
-        if (userId != po.Supplier_Distributor__r.Business_Owner__c) {
+        if (userId != po.Supplier_Distributor__r.Business_Owner__c && po.Total_Pending_Quantity__c != 0) {
             throw new AuraHandledException('Unauthorized Access - only the supplier distributor can close the order manually.');
         }
         
@@ -586,6 +632,16 @@ public without sharing class PurchaseOrderController {
         
         po.StageName__c = 'Approve Purchase Order';
         update po;
+    }
+    
+    @AuraEnabled(cacheable=true)
+    public static Account getCurrentAccountDetails() {
+        return [
+            SELECT Id, Name, ParentId, Parent.Name, Zydus_Price_Book__c, Zydus_Price_Book__r.Name
+            FROM Account
+            WHERE Business_Owner__c = :UserInfo.getUserId()
+            LIMIT 1
+        ];
     }
     
 }

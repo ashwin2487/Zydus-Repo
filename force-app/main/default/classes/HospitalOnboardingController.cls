@@ -38,7 +38,6 @@ public without sharing class HospitalOnboardingController{
         
         @AuraEnabled public String hospitalId;
         @AuraEnabled public String phyziiId;
-        @AuraEnabled public List<String> selectedProducts;
         @AuraEnabled public String commentOptionSelected;
     }
     
@@ -46,7 +45,7 @@ public without sharing class HospitalOnboardingController{
     public static String createHospitalRecord(String onboardingData) {
         
         HospitalPayload payload =(HospitalPayload) JSON.deserialize(onboardingData, HospitalPayload.class);
-        
+        id curUserId = userinfo.getuserid();
         List<Hospital__c> existingHosp = [
             SELECT Id, GST_Number__c, Hospital_Pin_Code__c 
             FROM Hospital__c 
@@ -57,18 +56,10 @@ public without sharing class HospitalOnboardingController{
         
         if (!existingHosp.isEmpty()) {
             try {
-                List<Account> zydusAccount = [
-                    SELECT Id, Name 
-                    FROM Account 
-                    WHERE Name = 'Zydus' 
-                    OR Name LIKE '%Zydus%' 
-                    OR Name LIKE '%ZYDUS%'
-                    LIMIT 1
-                ];
-                
-                if (!zydusAccount.isEmpty()) {
+              
+                if (!existingHosp.isEmpty()) {
                     Case duplicateCase = new Case(
-                        AccountId = zydusAccount[0].Id,
+                        AccountId = existingHosp[0].Id,
                         Subject = 'Duplicate Hospital Onboarding - GST: ' + payload.gstNumber + ', PIN: ' + payload.pin,
                         Status = 'New',
                         Priority = 'Medium',
@@ -81,7 +72,7 @@ public without sharing class HospitalOnboardingController{
                     } catch (Exception fieldEx) {
                         System.debug('Type/Reason fields not available on Case object: ' + fieldEx.getMessage());
                     }
-                    
+                 
                     insert duplicateCase;
                     
                     System.debug('Created duplicate hospital case: ' + duplicateCase.Id + ' for Zydus account');
@@ -97,6 +88,7 @@ public without sharing class HospitalOnboardingController{
                 return 'Hospital already exists for the provided GST and PIN code!';
             }
         } 
+        Id superDistributorUserId=[SELECT Business_Owner__c FROM Account WHERE Id=:payload.selectedSuperDistributor].Business_Owner__c;
         
         try {  
             Hospital__c hosp = new Hospital__c(
@@ -108,7 +100,7 @@ public without sharing class HospitalOnboardingController{
                 Registration_Number__c    = payload.hospRegistrationNumber,
                 Group__c 				  = String.isBlank(payload.hospGroup) ? null : payload.hospGroup,
                 Zydus_Price_Book__c		  = String.isBlank(payload.selectedPriceBook) ? null : payload.selectedPriceBook,
-                CC_Email_Address__c       = payload.ccEmail,
+                CC_Email_Address__c       = String.isBlank(payload.ccEmail)? null : payload.ccEmail,
                 Address__c                = payload.billingAddress,
                 City__c                   = payload.city,
                 State__c                  = payload.selectedState,
@@ -127,29 +119,47 @@ public without sharing class HospitalOnboardingController{
                 Invoice_Comment__c        = payload.invoiceComment,
                 Hospital_ID__c            = payload.hospitalId,
                 Phyzii_Hospital_ID__c     = payload.phyziiId,
-                Comment_Options__c        = payload.commentOptionSelected
+                Comment_Options__c        = payload.commentOptionSelected,
+                Ownerid                   = curUserId,
+                Super_Distributor_User__c = superDistributorUserId
             );
             insert hosp;
             
             List<Account_Hospital__c> junctions = new List<Account_Hospital__c>();
             if (String.isNotBlank(payload.selectedSuperDistributor)) {
-                junctions.add(new Account_Hospital__c(Account__c = payload.selectedSuperDistributor, Hospital__c = hosp.Id));
+                junctions.add(new Account_Hospital__c(Account__c = AccountAccessUtil.getParentBusinessOwner(payload.selectedSuperDistributor).Id, Hospital__c = hosp.Id));
             }
             if (String.isNotBlank(payload.selectedDistributor)) {
-                junctions.add(new Account_Hospital__c(Account__c = payload.selectedDistributor, Hospital__c = hosp.Id));
+                junctions.add(new Account_Hospital__c(Account__c = AccountAccessUtil.getParentBusinessOwner(payload.selectedDistributor).Id, Hospital__c = hosp.Id));
             }
             if (String.isNotBlank(payload.selectedSubDistributor)) {
-                junctions.add(new Account_Hospital__c(Account__c = payload.selectedSubDistributor, Hospital__c = hosp.Id));
+                junctions.add(new Account_Hospital__c(Account__c = AccountAccessUtil.getParentBusinessOwner(payload.selectedSubDistributor).Id, Hospital__c = hosp.Id));
             }
-            if (!junctions.isEmpty()) insert junctions;                
-            if (payload.selectedProducts != null && !payload.selectedProducts.isEmpty()) {
-                List<Hospital_Product__c> HPJunctions = new List<Hospital_Product__c>();
-                for (String prodId : payload.selectedProducts) {
-                    System.debug('Product Id : ' + prodId);
-                    HPJunctions.add(new Hospital_Product__c(Zydus_Product__c = prodId, Hospital__c = hosp.Id));
+            
+            
+            for(Account acc:[SELECT Id FROM Account WHERE RecordType.Name='Zydus']){
+                junctions.add(new Account_Hospital__c(Account__c = acc.Id, Hospital__c = hosp.Id));
+            }
+                    
+            if (!junctions.isEmpty()) insert junctions;   
+            
+            if (payload.selectedPriceBook != null && hosp.Zydus_Price_Book__c != null) {
+                
+                List<Hospital_Product__c> productsToCreate = new List<Hospital_Product__c>();
+                
+                for(Zydus_Price_Book_Entry__c pbe : [
+                    SELECT Zydus_Product__c
+                    FROM Zydus_Price_Book_Entry__c
+                    WHERE Zydus_Price_Book__c = :hosp.Zydus_Price_Book__c
+                ]) {
+                    productsToCreate.add(new Hospital_Product__c(
+                        Hospital__c = hosp.Id,
+                        Zydus_Product__c = pbe.Zydus_Product__c
+                    ));
                 }
-                if (!HPJunctions.isEmpty()) {
-                    insert HPJunctions;
+                
+                if (!productsToCreate.isEmpty()) {
+                    insert productsToCreate;
                 }
             }
             
@@ -158,6 +168,39 @@ public without sharing class HospitalOnboardingController{
             req.setProcessDefinitionNameOrId(System.Label.HospitalOnboardingApproval);
             req.setComments('Hospital submitted for approval');
             Approval.ProcessResult res = Approval.process(req);
+            
+            
+            User currentUser = [SELECT Name, Email FROM User WHERE Id = :UserInfo.getUserId()];
+            
+            User SystemUser = [SELECT Name, Email FROM User WHERE Profile.Name = 'System Administrator' LIMIT 1];
+            
+            String subject = 'New Hospital Onboarded – Awaiting Approval (L01, L02 & L03)';
+            String body =
+                'Dear ' + currentUser.Name + ',\n\n' +
+                'We are pleased to inform you that you have successfully onboarded a new Hospital named ' + hosp.Name + '. ' +
+                'The corresponding hospital has been created in the system.\n\n' +
+                'The hospital has now been submitted for L01, L02 &  level approvals. ' +
+                'You will be notified once the approval process is completed.\n\n' +
+                'Thank you for your continued efforts and support.\n\n' +
+                'Best regards,\nZydus DMS Team';
+            
+			String notyBody='Dear ' + currentUser.Name + ',\n\n' +
+                'We are pleased to inform you that you have successfully onboarded a new Hospital named ' + hosp.Name + '. ';
+            
+            List<String> emailRecipients = new List<String>();
+            
+            if (String.isNotBlank(currentUser.Email)) {
+                emailRecipients.add(currentUser.Email);
+            }
+            if (String.isNotBlank(hosp.CC_Email_Address__c)) {
+                emailRecipients.add(hosp.CC_Email_Address__c);
+            }
+            if (String.isNotBlank(hosp.Contact_Email__c)) {
+                emailRecipients.add(hosp.Contact_Email__c);
+            }
+            
+            NotificationService.sendEmail(emailRecipients, subject, body);
+            NotificationService.notifyUsers(new Set<String>{currentUser.Id, SystemUser.Id, hosp.Super_Distributor_User__c}, hosp.Id, subject, body);
             
             return res.isSuccess()
                 ? 'Hospital Created and submitted for approval successfully!'

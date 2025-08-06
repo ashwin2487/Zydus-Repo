@@ -11,12 +11,16 @@ public class PurchaseOrderProductHandler {
         Map<Id, Purchase_Order__c> relatedPOMap = new Map<Id, Purchase_Order__c>(
             [SELECT Id, StageName__c FROM Purchase_Order__c WHERE Id IN :purchaseOrderIds]
         );
-
+	List<Purchase_Order_Product__c> toUpdateList = new List<Purchase_Order_Product__c>();
         for (Purchase_Order_Product__c pop : newList) {
             Purchase_Order__c relatedPO = relatedPOMap.get(pop.Purchase_Order__c);
             if (relatedPO != null && relatedPO.StageName__c != 'Draft Purchase Order' && pop.Quantity__c != oldMap.get(pop.Id).Quantity__c) {
                 pop.addError('Editing is only allowed in Draft Purchase Order stage.');
+            }else if(relatedPO != null && relatedPO.StageName__c == 'Draft Purchase Order' && pop.Quantity__c != oldMap.get(pop.Id).Quantity__c){
+                pop.Pending_Quantity__c = pop.Quantity__c;
+                toUpdateList.add(pop);
             }
         }
+        update toUpdateList;
     }
 }
